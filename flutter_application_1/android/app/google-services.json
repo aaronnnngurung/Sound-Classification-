@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "472136775764",
+    "project_id": "login-and-signup-272be",
+    "storage_bucket": "login-and-signup-272be.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:472136775764:android:f77ef64b6845385a87d5c1",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZ-kxucC1YDkB6y4vgL04A6ESt1JRRWUA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
