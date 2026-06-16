@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'forgot_password_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -224,11 +225,17 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 12),
 
-                      // Forgot Password Link
+                    // Forgot Password Link
+                    
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
-                          onPressed: () {},
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const ForgotPasswordPage()),
+                            );
+                          },
                           child: Text(
                             'Forgot password?',
                             style: TextStyle(
@@ -238,7 +245,8 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                       ),
-
+                    
+          
                       // Error Message
                       if (_errorMessage != null)
                         Padding(
@@ -505,10 +513,17 @@ void _showSignUpDialog() {
               onPressed: () => Navigator.pop(context), // Safely closes on manual cancel
               child: Text('Cancel', style: TextStyle(color: Colors.grey[600])),
             ),
+            // --- HERE IS YOUR GLOWED-UP BUTTON ---
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue[600],
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                foregroundColor: Colors.white,
+                elevation: 3,
+                shadowColor: Colors.blue[600]!.withOpacity(0.4),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12), // Uniform look with input fields
+                ),
               ),
               onPressed: () async {
                 if (usernameController.text.trim().isEmpty ||
@@ -560,7 +575,14 @@ void _showSignUpDialog() {
                   );
                 }
               },
-              child: const Text('Sign Up', style: TextStyle(color: Colors.white)),
+              child: const Text(
+                'Sign Up', 
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  letterSpacing: 0.3,
+                ),
+              ),
             ),
           ],
         ),
