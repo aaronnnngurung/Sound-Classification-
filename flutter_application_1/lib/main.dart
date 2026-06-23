@@ -1,36 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // 1. Added this import for Firestore settings
-import 'package:flutter_application_1/wrapper.dart'; 
+import 'package:flutter_application_1/wrapper.dart';
+import 'firebase_options.dart'; // 1. Added this import for Firebase after the setup
 
-// 2. Added 'async' here so 'await' works perfectly
-void main() async { 
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // 3. Initialize Firebase once right at launch
-  await Firebase.initializeApp();
 
-  // 4. Corrected the lowercase 's' in Firestore
-  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
-  
-  runApp(const MyApp()); 
+  // Initialize Firebase once right at launch
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sound Classification App',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
+      title: 'VisiAlert',
+      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
       debugShowCheckedModeBanner: false,
-      // 5. Cleaned this up: Since Firebase initializes in main(), 
+
       // we can send the user straight to the Wrapper immediately!
-      home: const Wrapper(), 
+      home: const Wrapper(),
     );
   }
 }
