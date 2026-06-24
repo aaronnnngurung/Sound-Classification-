@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'forgot_password_page.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -343,9 +344,7 @@ class _LoginPageState extends State<LoginPage> {
 
                       // Google Sign In Button
                       OutlinedButton(
-                        onPressed: () {
-                          // Add Google Sign-In logic here
-                        },
+                      onPressed: _isLoading? null : signInWithGoogle,
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           side: BorderSide(color: Colors.grey[300]!),
@@ -590,24 +589,65 @@ void _showSignUpDialog() {
     );
   }
 
-  Future<void> _signInWithGoogle() async {
-    try {
-      // TODO: Implement Google Sign-In
-      // Steps:
-      // 1. Initialize Google Sign-In
-      // 2. Trigger sign-in flow
-      // 3. Get user credentials
-      // 4. Sign in to Firebase
-      // 5. Check if user exists in MongoDB
-      // 6. If new user, save basic info (from Google) to MongoDB
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Google Sign-In coming soon!'),
-          backgroundColor: Colors.blue,
-        ),
-      );
-    } catch (e) {
+  Future<void> signInWithGoogle() async {
+  setState(() {
+    _isLoading = true; 
+  });
+
+  try {
+    // 1. Access the plugin via its named singleton instance
+    final googleSignIn = GoogleSignIn.instance;
+
+    // 2. Trigger the account picker overlay
+    final GoogleSignInAccount? googleUser = await googleSignIn.authenticate();
+    
+    if (googleUser == null) {
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    // 3. Extract the identity authentication token (ID Token)
+    final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+
+    // 4. FIX: Use the authorizationClient to explicitly grab the Access Token
+    final authClient = googleSignIn.authorizationClient;
+    final authorization = await authClient.authorizeScopes(['email', 'profile']);
+    final String? accessToken = authorization.accessToken;
+
+    // 5. Pass both tokens cleanly into the Firebase Google Auth Credential provider
+    final credential = GoogleAuthProvider.credential(
+      idToken: googleAuth.idToken,
+      accessToken: accessToken,
+    );
+
+    UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+    User? user = userCredential.user;
+
+    if (user != null && mounted) {
+      // 6. Check Firestore records for the profile completion sequence
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!userDoc.exists) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+      } else {
+        Map<String, dynamic>? data = userDoc.data() as Map<String, dynamic>?;
+        
+        if (data == null || data['phoneNumber'] == null || data['emergencyContact'] == null) {
+          Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+        } else {
+          Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+        }
+      }
+    }
+
+  } catch (e) {
+    print("Google Sign-In Error: $e");
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Google Sign-In failed: $e'),
@@ -615,5 +655,12 @@ void _showSignUpDialog() {
         ),
       );
     }
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
+}
 }
