@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_application_1/detection_dashboard.dart';
 import 'package:flutter_application_1/settings_screen.dart';
 import 'package:flutter_application_1/profile_screen.dart';
+import 'package:flutter_application_1/detection_history_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,10 +42,7 @@ class MyApp extends StatelessWidget {
         '/home': (context) => const HomePage(),
 
         '/dashboard': (context) => const DetectionDashboard(),
-        '/history': (context) => const Scaffold(
-          // placeholder
-          body: Center(child: Text('History coming soon')),
-        ),
+        '/history': (context) => const DetectionHistoryScreen(),
         '/settings': (context) => const SettingsScreen(),
         '/profile': (context) => const ProfileScreen(),
       },
