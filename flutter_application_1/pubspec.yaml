@@ -47,6 +47,11 @@ dependencies:
   csv: ^6.0.0
   path_provider: ^2.1.2 
 
+  # Runtime Permissions
+  permission_handler: ^11.4.0
+
+  shared_preferences: ^2.2.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -1,8 +1,36 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<!-- Permissions your app needs  -->
+
+    <!-- Microphone — for sound detection (PB-01) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
+    <!-- Notifications — for sound alerts (PB-04) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!-- Foreground service — keeps detection running in background (PB-07) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+
+    <!-- Wake lock — prevents phone from sleeping during detection -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+
+    <!-- Vibration — for haptic alerts (PB-03) -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
+
+    <!-- Storage — for CSV download (Android 9 and below only) -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28"/>
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28"/>
+
     <application
-        android:label="flutter_application_1"
+        android:label="SoundClass"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
