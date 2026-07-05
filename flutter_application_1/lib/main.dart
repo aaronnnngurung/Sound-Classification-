@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Added this import for Firestore settings
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_application_1/homepage.dart';
 import 'package:flutter_application_1/login.dart';
+import 'package:flutter_application_1/forgot_password_page.dart';
 import 'package:flutter_application_1/wrapper.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_application_1/permission_screen.dart';
 import 'package:flutter_application_1/detection_dashboard.dart';
-import 'package:flutter_application_1/settings_screen.dart';
 import 'package:flutter_application_1/profile_screen.dart';
+import 'package:flutter_application_1/settings_screen.dart';
 import 'package:flutter_application_1/detection_history_screen.dart';
+import 'permission_service.dart';
+import 'package:flutter_application_1/onboarding_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Firebase.initializeApp();
+
   await GoogleSignIn.instance.initialize(
     serverClientId:
         '472136775764-ablk8iqlfjd1hp2qd6jn45o9bfuqp8sr.apps.googleusercontent.com',
@@ -23,28 +28,53 @@ void main() async {
     persistenceEnabled: true,
   );
 
-  runApp(const MyApp());
+  // Check permissions
+  final permResult = await PermissionService.instance.checkAll();
+
+  // Check if onboarding already completed
+  final prefs = await SharedPreferences.getInstance();
+  final onboardingDone = prefs.getBool('onboarding_complete') ?? false;
+
+  // Decide which screen to show first
+  Widget homeScreen;
+  if (!permResult.allGranted) {
+    // Show permissions first
+    homeScreen = const PermissionScreen();
+  } else if (!onboardingDone) {
+    // Show onboarding after permissions
+    homeScreen = const OnboardingScreen();
+  } else {
+    // Both done — go straight to app
+    homeScreen = const Wrapper();
+  }
+
+  runApp(MyApp(homeScreen: homeScreen));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  final Widget homeScreen;
+  const MyApp({Key? key, required this.homeScreen}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sound Classification App',
-      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+      title: 'SoundClass',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
       debugShowCheckedModeBanner: false,
-
-      home: const Wrapper(),
+      home: homeScreen,
       routes: {
         '/login': (context) => const LoginPage(),
         '/home': (context) => const HomePage(),
-
+        '/forgot_password': (context) => const ForgotPasswordPage(),
         '/dashboard': (context) => const DetectionDashboard(),
-        '/history': (context) => const DetectionHistoryScreen(),
-        '/settings': (context) => const SettingsScreen(),
         '/profile': (context) => const ProfileScreen(),
+        '/settings': (context) => const SettingsScreen(),
+        '/history': (context) => const DetectionHistoryScreen(),
+        '/permissions': (context) => const PermissionScreen(),
+        '/onboarding': (context) => const OnboardingScreen(),
       },
     );
   }

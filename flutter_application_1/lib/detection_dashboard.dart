@@ -1,6 +1,8 @@
 // detection_dashboard.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'permission_service.dart';
 
 class DetectionDashboard extends StatefulWidget {
   const DetectionDashboard({Key? key}) : super(key: key);
@@ -105,18 +107,88 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     super.dispose();
   }
 
-  void _toggleListening() {
-    setState(() {
-      _isListening = !_isListening;
-    });
-
+  Future<void> _toggleListening() async {
+    // If already listening → stop
     if (_isListening) {
-      _pulseController.repeat(reverse: true);
-      // TODO: Aaron wires in the TFLite inference loop here
-      // This will call _onSoundDetected(className, confidence)
-    } else {
+      setState(() => _isListening = false);
       _pulseController.stop();
+      return;
     }
+
+    // Check microphone permission before starting
+    final result = await PermissionService.instance.checkAll();
+
+    if (!result.microphoneGranted) {
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.mic_off_rounded, color: Colors.red[600]),
+              const SizedBox(width: 10),
+              const Text(
+                'Microphone Required',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Sound detection needs microphone access.\n\n'
+            'Please grant microphone permission to start detecting sounds.',
+            style: TextStyle(height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+
+                final status = await PermissionService.instance
+                    .requestMicrophone();
+
+                if (status.isGranted && mounted) {
+                  setState(() {
+                    _isListening = true;
+                  });
+
+                  _pulseController.repeat(reverse: true);
+
+                  // Aaron will connect TFLite inference here.
+                } else if (mounted) {
+                  await PermissionService.instance.openSettings();
+                }
+              },
+              child: const Text("Grant Permission"),
+            ),
+          ],
+        ),
+      );
+
+      return;
+    }
+
+    // Permission granted
+    setState(() => _isListening = true);
+    _pulseController.repeat(reverse: true);
+
+    // =====================================================
+    // TODO (Aaron):
+    // Start the TFLite sound classification here.
+    // When a sound is detected it should call:
+    //
+    // _onSoundDetected(className, confidence);
+    //
+    // Example:
+    // _onSoundDetected("siren", 0.94);
+    // =====================================================
   }
 
   // Called by the inference engine when a sound is classified above 85%
