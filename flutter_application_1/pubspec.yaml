@@ -52,6 +52,9 @@ dependencies:
 
   shared_preferences: ^2.2.3
 
+  #  Added flutter_foreground_task package
+  flutter_foreground_task: ^8.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -14,10 +14,14 @@ import 'package:flutter_application_1/detection_history_screen.dart';
 import 'permission_service.dart';
 import 'package:flutter_application_1/onboarding_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_application_1/foreground_service_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+
+  // Initialize foreground service settings
+  ForegroundServiceManager.initialize();
 
   await GoogleSignIn.instance.initialize(
     serverClientId:
