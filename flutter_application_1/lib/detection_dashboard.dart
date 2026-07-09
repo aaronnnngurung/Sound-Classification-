@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'permission_service.dart';
+import 'audio_ml_service.dart';
 
 class DetectionDashboard extends StatefulWidget {
   const DetectionDashboard({Key? key}) : super(key: key);
@@ -112,6 +113,8 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     if (_isListening) {
       setState(() => _isListening = false);
       _pulseController.stop();
+
+      AudioMLService.instance.stopListening();
       return;
     }
 
@@ -162,6 +165,8 @@ class _DetectionDashboardState extends State<DetectionDashboard>
                   _pulseController.repeat(reverse: true);
 
                   // Aaron will connect TFLite inference here.
+                  String modelPath = "assets/models/emergency_audio_classifier.tflite";
+                  
                 } else if (mounted) {
                   await PermissionService.instance.openSettings();
                 }
@@ -182,6 +187,13 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     // =====================================================
     // TODO (Aaron):
     // Start the TFLite sound classification here.
+    AudioMLService.instance.startListening(onResult: 
+    (String detectedClass, double confidence) {
+      // Only trigger if confidence is above 85%
+      if (confidence >= 0.85) {
+        _onSoundDetected(detectedClass, confidence);
+      }
+    });
     // When a sound is detected it should call:
     //
     // _onSoundDetected(className, confidence);

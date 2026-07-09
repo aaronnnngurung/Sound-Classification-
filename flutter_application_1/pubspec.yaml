@@ -51,6 +51,9 @@ dependencies:
   permission_handler: ^11.4.0
 
   shared_preferences: ^2.2.3
+  tflite_flutter: ^0.12.1
+  record: ^7.1.1
+  fftea: ^1.5.0+1
 
 dev_dependencies:
   flutter_test:
@@ -80,6 +83,7 @@ flutter:
   assets:
     - assets/image.png
     - assets/logo.png
+    - assets/models/emergency_audio_classifier.tflite
     
   # To add assets to your application, add an assets section, like this:
   # assets:
