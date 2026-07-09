@@ -55,6 +55,9 @@ dependencies:
   record: ^7.1.1
   fftea: ^1.5.0+1
 
+  #  Added flutter_foreground_task package
+  flutter_foreground_task: ^8.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
