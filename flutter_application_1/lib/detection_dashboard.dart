@@ -1,15 +1,11 @@
-// detection_dashboard.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'foreground_service_manager.dart';
 import 'permission_service.dart';
-<<<<<<< HEAD
 import 'audio_ml_service.dart';
-=======
 import 'database_helper.dart';
->>>>>>> 86748a6fabc657fa5753100a3339556d6f0d03d3
 
 class DetectionDashboard extends StatefulWidget {
   const DetectionDashboard({Key? key}) : super(key: key);
@@ -20,18 +16,17 @@ class DetectionDashboard extends StatefulWidget {
 
 class _DetectionDashboardState extends State<DetectionDashboard>
     with SingleTickerProviderStateMixin {
-  // State variables
   bool _isListening = false;
   String? _lastDetectedSound;
   double? _lastConfidence;
   DateTime? _lastDetectedTime;
 
-  // Pulse animation for listening indicator
+//we add this to make sure that the loop is not infinite
+  bool _isAlertWindowOpen = false; 
+
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
-  //  Sound configuration
-  // Maps each sound class to display properties
   final Map<String, Map<String, dynamic>> _soundConfig = {
     'siren': {
       'label': 'Siren',
@@ -50,12 +45,6 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       'icon': Icons.directions_car_rounded,
       'color': Colors.amber[700],
       'description': 'Vehicle horn detected',
-    },
-    'fire_alarm': {
-      'label': 'Fire Alarm',
-      'icon': Icons.local_fire_department_rounded,
-      'color': Colors.deepOrange[600],
-      'description': 'Fire alarm sound detected',
     },
     'glass_breaking': {
       'label': 'Glass Breaking',
@@ -89,12 +78,10 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     },
   };
 
-  // Lifecycle
   @override
   void initState() {
     super.initState();
 
-    // Setup pulse animation for listening indicator
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
@@ -104,8 +91,6 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // Check if service is already running when
-    // screen opens (user may have navigated away)
     _syncServiceState();
   }
 
@@ -115,18 +100,6 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     super.dispose();
   }
 
-<<<<<<< HEAD
-  Future<void> _toggleListening() async {
-    // If already listening → stop
-    if (_isListening) {
-      setState(() => _isListening = false);
-      _pulseController.stop();
-
-      AudioMLService.instance.stopListening();
-      return;
-=======
-  // Sync UI state with actual service state
-  // Handles case where user navigates away and back
   Future<void> _syncServiceState() async {
     final running = await ForegroundServiceManager.instance.isRunning;
     if (mounted) {
@@ -134,11 +107,9 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       if (running) {
         _pulseController.repeat(reverse: true);
       }
->>>>>>> 86748a6fabc657fa5753100a3339556d6f0d03d3
     }
   }
 
-  //  Toggle listening on/off
   Future<void> _toggleListening() async {
     if (_isListening) {
       await _stopDetection();
@@ -147,13 +118,13 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     }
   }
 
-  // Stop detection and foreground service
   Future<void> _stopDetection() async {
     setState(() => _isListening = false);
     _pulseController.stop();
     _pulseController.reset();
 
     await ForegroundServiceManager.instance.stopService();
+    AudioMLService.instance.stopListening();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -172,12 +143,10 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     }
   }
 
-  // Check permissions before starting
   Future<void> _checkPermissionsThenStart() async {
     final result = await PermissionService.instance.checkAll();
 
     if (!result.microphoneGranted) {
-<<<<<<< HEAD
       if (!mounted) return;
 
       showDialog(
@@ -204,7 +173,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel', style: TextStyle(color: Colors.grey)),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -214,15 +183,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
                     .requestMicrophone();
 
                 if (status.isGranted && mounted) {
-                  setState(() {
-                    _isListening = true;
-                  });
-
-                  _pulseController.repeat(reverse: true);
-
-                  // Aaron will connect TFLite inference here.
-                  String modelPath = "assets/models/emergency_audio_classifier.tflite";
-                  
+                  await _startDetection();
                 } else if (mounted) {
                   await PermissionService.instance.openSettings();
                 }
@@ -233,43 +194,25 @@ class _DetectionDashboardState extends State<DetectionDashboard>
         ),
       );
 
-=======
-      _showMicPermissionDialog();
->>>>>>> 86748a6fabc657fa5753100a3339556d6f0d03d3
       return;
     }
 
     await _startDetection();
   }
 
-  // Start detection and foreground service
   Future<void> _startDetection() async {
     setState(() => _isListening = true);
     _pulseController.repeat(reverse: true);
 
-<<<<<<< HEAD
-    // =====================================================
-    // TODO (Aaron):
-    // Start the TFLite sound classification here.
-    AudioMLService.instance.startListening(onResult: 
-    (String detectedClass, double confidence) {
-      // Only trigger if confidence is above 85%
-      if (confidence >= 0.85) {
-        _onSoundDetected(detectedClass, confidence);
-      }
-    });
-    // When a sound is detected it should call:
-    //
-    // _onSoundDetected(className, confidence);
-    //
-    // Example:
-    // _onSoundDetected("siren", 0.94);
-    // =====================================================
-=======
-    // Start the foreground service
-    // Shows persistent notification
-    // Keeps app alive in background (PB-07)
     await ForegroundServiceManager.instance.startService();
+
+    AudioMLService.instance.startListening(
+      onResult: (String detectedClass, double confidence) {
+        if (confidence >= 0.85 && !_isAlertWindowOpen) {
+          _onSoundDetected(detectedClass, confidence);
+        }
+      },
+    );
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -286,30 +229,18 @@ class _DetectionDashboardState extends State<DetectionDashboard>
         ),
       );
     }
-
-    // ── Aaron connects TFLite inference here ──────────
-    // When his model detects a sound above 85%
-    // confidence, he calls:
-    // _onSoundDetected('siren', 0.94);
->>>>>>> 86748a6fabc657fa5753100a3339556d6f0d03d3
   }
 
-  // ── Called by  TFLite when sound detected ────────────────
-  // This is the central method that connects
-  // ML output to UI, haptics, alerts, and storage
   void _onSoundDetected(String soundClass, double confidence) {
-    // Update UI state
     setState(() {
       _lastDetectedSound = soundClass;
       _lastConfidence = confidence;
       _lastDetectedTime = DateTime.now();
     });
 
-    // Get config for this sound class
     final config = _soundConfig[soundClass];
     if (config == null) return;
 
-    // 1. Save to SQLite history (PB-09)
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
       DatabaseHelper.instance.insertDetection(
@@ -320,32 +251,24 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       );
     }
 
-    // 2. Update foreground notification
     ForegroundServiceManager.instance.updateNotification(
       config['label'] as String,
       confidence,
     );
 
-    // Reset notification after 5 seconds
     Future.delayed(const Duration(seconds: 5), () {
       if (_isListening) {
         ForegroundServiceManager.instance.resetNotification();
       }
     });
 
-    // 3. Trigger haptic feedback (PB-03)
     _triggerHapticForSound(soundClass);
-
-    // 4. Show full-screen visual alert (PB-04)
     _showAlertOverlay(soundClass, confidence);
   }
 
-  //  Haptic patterns per sound class (PB-03)
   void _triggerHapticForSound(String soundClass) {
     switch (soundClass) {
       case 'siren':
-      case 'fire_alarm':
-        // Three strong pulses for critical emergencies
         HapticFeedback.heavyImpact();
         Future.delayed(
           const Duration(milliseconds: 200),
@@ -358,7 +281,6 @@ class _DetectionDashboardState extends State<DetectionDashboard>
         break;
 
       case 'crying_baby':
-        // Two medium pulses for baby cry
         HapticFeedback.mediumImpact();
         Future.delayed(
           const Duration(milliseconds: 300),
@@ -367,12 +289,10 @@ class _DetectionDashboardState extends State<DetectionDashboard>
         break;
 
       case 'car_horn':
-        // One strong pulse for horn
         HapticFeedback.heavyImpact();
         break;
 
       case 'glass_breaking':
-        // Three rapid light pulses
         HapticFeedback.lightImpact();
         Future.delayed(
           const Duration(milliseconds: 100),
@@ -385,278 +305,117 @@ class _DetectionDashboardState extends State<DetectionDashboard>
         break;
 
       default:
-        // Single light pulse for other sounds
         HapticFeedback.lightImpact();
         break;
     }
   }
 
-  //  Full-screen alert overlay (PB-04)
   void _showAlertOverlay(String soundClass, double confidence) {
     final config = _soundConfig[soundClass];
     if (config == null) return;
+    //we do this to lock the screen from recieving new alrts imediately.
+    setState(() {
+      _isAlertWindowOpen = true;
+    });
 
     showDialog(
       context: context,
-      barrierDismissible: false,
-      barrierColor: (config['color'] as Color).withOpacity(0.92),
+      barrierDismissible: false, //this prevents closing by tapping outside the box
       builder: (ctx) => AlertOverlay(
         soundLabel: config['label'] as String,
         description: config['description'] as String,
         icon: config['icon'] as IconData,
         color: config['color'] as Color,
         confidence: confidence,
-        onDismiss: () => Navigator.of(ctx).pop(),
+        onDismiss: () {
+          Navigator.pop(ctx); //remove the current overlay 
+
+          Future.delayed(const Duration(seconds: 2), (){
+            if (mounted){
+              setState((){
+                _isAlertWindowOpen = false; //unlock the screen after 2 seconds
+              });
+            }
+          });
+        }
       ),
     );
   }
 
-  //  Microphone permission dialog
-  void _showMicPermissionDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.mic_off_rounded, color: Colors.red[600]),
-            const SizedBox(width: 10),
-            const Text(
-              'Microphone Required',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: const Text(
-          'Sound detection needs microphone access '
-          'to monitor your environment.\n\n'
-          'Please grant microphone permission '
-          'to start detecting sounds.',
-          style: TextStyle(height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: Colors.grey[600])),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final status = await PermissionService.instance
-                  .requestMicrophone();
-              if (status.isGranted && mounted) {
-                await _startDetection();
-              } else if (mounted) {
-                await PermissionService.instance.openSettings();
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[600],
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text('Grant Permission'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Build
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text(
-          'Sound Detection',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
+        title: const Text('Emergency Sound Detector'),
         centerTitle: true,
-        backgroundColor: Colors.blue[600],
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          // History shortcut
-          IconButton(
-            icon: const Icon(Icons.history_rounded),
-            tooltip: 'Detection History',
-            onPressed: () => Navigator.pushNamed(context, '/history'),
-          ),
-          // Settings shortcut
-          IconButton(
-            icon: const Icon(Icons.settings_rounded),
-            tooltip: 'Settings',
-            onPressed: () => Navigator.pushNamed(context, '/settings'),
-          ),
-        ],
       ),
       body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            const SizedBox(height: 16),
-
-            // Status banner when running
-            if (_isListening) _buildRunningBanner(),
-            if (_isListening) const SizedBox(height: 16),
-
-            //  Listening indicator (PB-06)
-            _buildListeningIndicator(),
-
-            const SizedBox(height: 36),
-
-            //  Start/Stop toggle (PB-08)
-            _buildToggleButton(),
-
-            const SizedBox(height: 28),
-
-            //  Last detected card
-            _buildLastDetectedCard(),
-
-            const SizedBox(height: 28),
-
-            //  Detectable sounds grid
-            _buildSoundCategoriesGrid(),
-
-            // ── Temporary test button
-            // REMOVE after Aaron finishes TFLite
-            const SizedBox(height: 20),
-            _buildTestButton(),
-
-            const SizedBox(height: 32),
+            _buildListeningCard(),
+            const SizedBox(height: 24),
+            _buildLastDetectionCard(),
+            const SizedBox(height: 24),
+            _buildControlButton(),
           ],
         ),
       ),
     );
   }
 
-  //  Running banner
-  Widget _buildRunningBanner() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.green[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.green[300]!),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.circle, size: 10, color: Colors.green[600]),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Detection is running in the background. '
-              'You will be alerted even if you switch apps.',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.green[800],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+  Widget _buildListeningCard() {
+    return Card(
+      elevation: 8,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: _isListening
+                ? [Colors.green[400]!, Colors.green[600]!]
+                : [Colors.grey[400]!, Colors.grey[600]!],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-        ],
-      ),
-    );
-  }
-
-  //  Pulsing mic indicator (PB-06)
-  Widget _buildListeningIndicator() {
-    return Column(
-      children: [
-        AnimatedBuilder(
-          animation: _pulseAnimation,
-          builder: (context, child) {
-            return Transform.scale(
-              scale: _isListening ? _pulseAnimation.value : 1.0,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ScaleTransition(
+              scale: _pulseAnimation,
               child: Container(
-                width: 140,
-                height: 140,
+                width: 100,
+                height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _isListening ? Colors.blue[600] : Colors.grey[300],
-                  boxShadow: _isListening
-                      ? [
-                          BoxShadow(
-                            color: Colors.blue[600]!.withOpacity(0.4),
-                            blurRadius: 30,
-                            spreadRadius: 10,
-                          ),
-                        ]
-                      : [],
+                  color: Colors.white.withOpacity(0.3),
                 ),
                 child: Icon(
-                  _isListening ? Icons.mic_rounded : Icons.mic_off_rounded,
-                  size: 64,
+                  _isListening ? Icons.mic : Icons.mic_off,
+                  size: 50,
                   color: Colors.white,
                 ),
               ),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        Text(
-          _isListening ? 'Listening...' : 'Tap to Start',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: _isListening ? Colors.blue[600] : Colors.grey[500],
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          _isListening
-              ? 'Monitoring your environment'
-              : 'Sound detection is paused',
-          style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-        ),
-      ],
-    );
-  }
-
-  //  Start/Stop button (PB-08) ────────────────────────────────────
-  Widget _buildToggleButton() {
-    return GestureDetector(
-      onTap: _toggleListening,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          color: _isListening ? Colors.red[600] : Colors.blue[600],
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: (_isListening ? Colors.red[600]! : Colors.blue[600]!)
-                  .withOpacity(0.35),
-              blurRadius: 15,
-              offset: const Offset(0, 6),
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _isListening
-                  ? Icons.stop_circle_rounded
-                  : Icons.play_circle_rounded,
-              color: Colors.white,
-              size: 26,
-            ),
-            const SizedBox(width: 10),
+            const SizedBox(height: 16),
             Text(
-              _isListening ? 'Stop Detection' : 'Start Detection',
+              _isListening ? 'Listening...' : 'Not Listening',
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 17,
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _isListening
+                  ? 'Detecting emergency sounds'
+                  : 'Tap the button to start',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
               ),
             ),
           ],
@@ -665,251 +424,136 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     );
   }
 
-  //  Last detected sound card
-  Widget _buildLastDetectedCard() {
+  Widget _buildLastDetectionCard() {
     if (_lastDetectedSound == null) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey[200]!),
-        ),
-        child: Column(
-          children: [
-            Icon(Icons.hearing_rounded, size: 36, color: Colors.grey[300]),
-            const SizedBox(height: 10),
-            Text(
-              'No sound detected yet',
+      return Card(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          child: Center(
+            child: Text(
+              'No detections yet',
               style: TextStyle(
-                color: Colors.grey[500],
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
+                color: Colors.grey[600],
+                fontSize: 14,
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Start detection to begin monitoring',
-              style: TextStyle(color: Colors.grey[400], fontSize: 12),
-            ),
-          ],
+          ),
         ),
       );
     }
 
-    final config = _soundConfig[_lastDetectedSound!];
-    final color = (config?['color'] as Color?) ?? Colors.blue[600]!;
+    final config = _soundConfig[_lastDetectedSound];
+    if (config == null) return const SizedBox();
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+    return Card(
+      elevation: 4,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: config['color'] as Color,
+            width: 2,
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              config?['icon'] as IconData? ?? Icons.volume_up_rounded,
-              color: color,
-              size: 26,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Text(
-                  'Last Detected',
-                  style: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
+                Icon(
+                  config['icon'] as IconData,
+                  color: config['color'] as Color,
+                  size: 28,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Last Detection',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 12,
+                        ),
+                      ),
+                      Text(
+                        config['label'] as String,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  config?['label'] as String? ?? _lastDetectedSound!,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${(_lastConfidence! * 100).toStringAsFixed(1)}% confidence',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${(_lastConfidence! * 100).toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        color: config['color'] as Color,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      _formatTime(_lastDetectedTime!),
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ),
-          if (_lastDetectedTime != null)
-            Text(
-              _formatTime(_lastDetectedTime!),
-              style: TextStyle(color: Colors.grey[400], fontSize: 11),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: _lastConfidence,
+                minHeight: 6,
+                backgroundColor: (config['color'] as Color).withOpacity(0.2),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  config['color'] as Color,
+                ),
+              ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  //  Sound categories grid
-  Widget _buildSoundCategoriesGrid() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'DETECTABLE SOUNDS',
-          style: TextStyle(
-            color: Colors.grey[500],
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.0,
-          ),
+  Widget _buildControlButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _toggleListening,
+        icon: Icon(
+          _isListening ? Icons.stop_circle_rounded : Icons.mic_rounded,
         ),
-        const SizedBox(height: 12),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 1.1,
-          ),
-          itemCount: _soundConfig.length,
-          itemBuilder: (context, index) {
-            final key = _soundConfig.keys.elementAt(index);
-            final config = _soundConfig[key]!;
-            final color = config['color'] as Color;
-            final isActive = _lastDetectedSound == key;
-
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              decoration: BoxDecoration(
-                color: isActive ? color.withOpacity(0.15) : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isActive ? color : Colors.grey[200]!,
-                  width: isActive ? 2 : 1,
-                ),
-                boxShadow: isActive
-                    ? [
-                        BoxShadow(
-                          color: color.withOpacity(0.15),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ]
-                    : [],
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    config['icon'] as IconData,
-                    color: isActive ? color : Colors.grey[400],
-                    size: 28,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    config['label'] as String,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: isActive ? color : Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+        label: Text(
+          _isListening ? 'Stop Detection' : 'Start Detection',
+          style: const TextStyle(fontSize: 16),
         ),
-      ],
-    );
-  }
-
-  //  Test button
-  // Simulates a detection — REMOVE after Aaron
-  // connects TFLite
-  Widget _buildTestButton() {
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.orange[50],
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _isListening ? Colors.red : Colors.green,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange[200]!),
-          ),
-          child: Text(
-            '⚠ Test mode — remove after TFLite integration',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.orange[800],
-              fontWeight: FontWeight.w500,
-            ),
           ),
         ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          alignment: WrapAlignment.center,
-          children: _soundConfig.keys.map((key) {
-            final config = _soundConfig[key]!;
-            final color = config['color'] as Color;
-            return GestureDetector(
-              onTap: () => _onSoundDetected(key, 0.92),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: color.withOpacity(0.4)),
-                ),
-                child: Text(
-                  config['label'] as String,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: color,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
+      ),
     );
   }
 
-  //  Helpers
   String _formatTime(DateTime time) {
     final now = DateTime.now();
     final diff = now.difference(time);
@@ -919,12 +563,10 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     if (diff.inMinutes < 60) {
       return '${diff.inMinutes}m ago';
     }
-    return '${time.hour}:'
-        '${time.minute.toString().padLeft(2, '0')}';
+    return '${time.hour}:${time.minute.toString().padLeft(2, '0')}';
   }
 }
 
-// Full-screen alert overlay widget (PB-04)
 class AlertOverlay extends StatefulWidget {
   final String soundLabel;
   final String description;
@@ -996,7 +638,6 @@ class _AlertOverlayState extends State<AlertOverlay>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Animated icon
                 ScaleTransition(
                   scale: _scaleAnimation,
                   child: Container(
@@ -1009,10 +650,7 @@ class _AlertOverlayState extends State<AlertOverlay>
                     child: Icon(widget.icon, size: 72, color: Colors.white),
                   ),
                 ),
-
                 const SizedBox(height: 32),
-
-                // Sound detected label
                 Text(
                   'SOUND DETECTED',
                   style: TextStyle(
@@ -1022,10 +660,7 @@ class _AlertOverlayState extends State<AlertOverlay>
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-
                 const SizedBox(height: 12),
-
-                // Sound name
                 Text(
                   widget.soundLabel,
                   style: const TextStyle(
@@ -1034,10 +669,7 @@ class _AlertOverlayState extends State<AlertOverlay>
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-
                 const SizedBox(height: 10),
-
-                // Description
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 40),
                   child: Text(
@@ -1046,10 +678,7 @@ class _AlertOverlayState extends State<AlertOverlay>
                     style: const TextStyle(color: Colors.white70, fontSize: 16),
                   ),
                 ),
-
                 const SizedBox(height: 10),
-
-                // Confidence
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -1068,10 +697,7 @@ class _AlertOverlayState extends State<AlertOverlay>
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 60),
-
-                // Dismiss button
                 GestureDetector(
                   onTap: widget.onDismiss,
                   child: Container(
@@ -1100,10 +726,7 @@ class _AlertOverlayState extends State<AlertOverlay>
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 20),
-
-                // Swipe hint
                 Text(
                   'Tap dismiss to close this alert',
                   style: TextStyle(color: Colors.white54, fontSize: 12),
