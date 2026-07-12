@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:record/record.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:fftea/fftea.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 // Singleton service for audio classification.
 // All constants below must match exactly with the training notebook.
@@ -75,9 +76,23 @@ class AudioMLService {
       return;
     }
 
-    if (!await _audioRecorder.hasPermission()) {
-      print('AudioMLService: Microphone permission denied.');
-      return;
+    final status = await Permission.microphone.status;
+    print("Permission Handler Status: $status");
+
+    final recorderPermission = await _audioRecorder.hasPermission();
+    print("Record Package Permission: $recorderPermission");
+
+    if (!recorderPermission) {
+      print("Requesting microphone permission...");
+
+      final status = await Permission.microphone.request();
+
+      if (!status.isGranted) {
+        print("Microphone still denied.");
+        return;
+      }
+
+      print("Microphone granted.");
     }
 
     _isListening = true;
@@ -122,9 +137,7 @@ class AudioMLService {
     }
   }
 
-  void _runInference(
-    Function(String classLabel, double confidence) onResult,
-  ) {
+  void _runInference(Function(String classLabel, double confidence) onResult) {
     if (_interpreter == null) return;
 
     try {
@@ -166,7 +179,9 @@ class AudioMLService {
 
       if (bestMatchIndex != -1 && bestMatchIndex < _labels.length) {
         String detectedLabel = _labels[bestMatchIndex];
-        print('AudioMLService: Predicted $detectedLabel (${(highestConfidence * 100).toStringAsFixed(1)}%)');
+        print(
+          'AudioMLService: Predicted $detectedLabel (${(highestConfidence * 100).toStringAsFixed(1)}%)',
+        );
         onResult(detectedLabel, highestConfidence);
       }
     } catch (e) {
@@ -261,7 +276,10 @@ class AudioMLService {
     return melSpectrogramDb;
   }
 
-  List<List<double>> _padOrTrim(List<List<double>> spectrogram, int targetLength) {
+  List<List<double>> _padOrTrim(
+    List<List<double>> spectrogram,
+    int targetLength,
+  ) {
     final currentLength = spectrogram[0].length;
 
     if (currentLength == targetLength) {
@@ -372,7 +390,9 @@ class AudioMLService {
 
         if (bin >= leftBin && bin <= centerBin && centerBin != leftBin) {
           weight = (bin - leftBin) / (centerBin - leftBin);
-        } else if (bin > centerBin && bin <= rightBin && rightBin != centerBin) {
+        } else if (bin > centerBin &&
+            bin <= rightBin &&
+            rightBin != centerBin) {
           weight = (rightBin - bin) / (rightBin - centerBin);
         }
 

@@ -1,137 +1,173 @@
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'dart:developer';
+import 'audio_ml_service.dart';
+
+@pragma('vm:entry-point')
+void startCallback() {
+  FlutterForegroundTask.setTaskHandler(SoundDetectionTaskHandler());
+}
 
 class ForegroundServiceManager {
-  // Singleton
   static final ForegroundServiceManager instance = ForegroundServiceManager._();
   ForegroundServiceManager._();
 
-  // Initialize the foreground task settings
-  // Call this once in main() before runApp
   static void initialize() {
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'soundclass_detection',
-        channelName: 'Sound Detection Service',
-        channelDescription:
-            'SoundClass is actively monitoring '
-            'sounds in your environment.',
-        channelImportance: NotificationChannelImportance.LOW,
-        priority: NotificationPriority.LOW,
-        // LOW priority means notification is visible
-        // but does not make sound or pop up intrusively
+        channelId: 'soundclass_channel',
+        channelName: 'Sound Detection',
+        channelDescription: 'SoundClass emergency sound alerts',
+        channelImportance: NotificationChannelImportance.HIGH,
+        priority: NotificationPriority.HIGH,
       ),
       iosNotificationOptions: const IOSNotificationOptions(
         showNotification: true,
         playSound: false,
       ),
       foregroundTaskOptions: ForegroundTaskOptions(
-        // How often the background task runs
-        // 5000ms = checks every 5 seconds
-        eventAction: ForegroundTaskEventAction.repeat(5000),
+        eventAction: ForegroundTaskEventAction.repeat(10000),
         autoRunOnBoot: false,
-        // Do not restart on reboot automatically
         allowWakeLock: true,
-        // Keep CPU awake during detection
         allowWifiLock: false,
       ),
     );
   }
 
-  //  Start the foreground service
-  Future<ServiceRequestResult> startService() async {
+  Future<bool> startService() async {
+    print('=== START SERVICE ===');
+
+    // Request notification permission
+    // Required on Android 13+
+    await FlutterForegroundTask.requestNotificationPermission();
+
+    // If already running just restart it
     if (await FlutterForegroundTask.isRunningService) {
-      return await FlutterForegroundTask.restartService();
+      print('Already running — restarting');
+      await FlutterForegroundTask.restartService();
+      return true;
     }
 
-    return await FlutterForegroundTask.startService(
-      serviceId: 101,
-      notificationTitle: 'SoundClass is Active',
-      notificationText: 'Monitoring your environment for sounds...',
-      notificationIcon: null,
-      notificationButtons: [
-        const NotificationButton(id: 'stop_detection', text: 'Stop Detection'),
-      ],
-      callback: startCallback,
-    );
+    // Try up to 3 times
+    // Works on all brands including
+    // Samsung, Xiaomi, Oppo, Vivo, Realme, OnePlus
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      print('Attempt $attempt...');
+      try {
+        await FlutterForegroundTask.startService(
+          serviceId: 256,
+          notificationTitle: 'SoundClass Active',
+          notificationText: 'Monitoring your environment...',
+          notificationButtons: [
+            const NotificationButton(id: 'stop_btn', text: 'Stop'),
+          ],
+          callback: startCallback,
+        );
+      } catch (e) {
+        print('Attempt $attempt error: $e');
+      }
+
+      // Wait then check if it started
+      await Future.delayed(const Duration(milliseconds: 800));
+
+      final running = await FlutterForegroundTask.isRunningService;
+      print('Running after attempt $attempt: $running');
+
+      if (running) return true;
+
+      // Wait longer before next attempt
+      if (attempt < 3) {
+        await Future.delayed(const Duration(seconds: 1));
+      }
+    }
+
+    return false;
   }
 
-  //  Stop the foreground service
-  Future<ServiceRequestResult> stopService() async {
-    return await FlutterForegroundTask.stopService();
+  Future<void> stopService() async {
+    print('=== STOP SERVICE ===');
+    await AudioMLService.instance.stopListening();
+    await FlutterForegroundTask.stopService();
   }
 
-  //  Update notification text
-  // Called when a sound is detected to update
-  // the notification with the latest sound
-  Future<void> updateNotification(String soundLabel, double confidence) async {
+  Future<void> updateNotification(String label, double confidence) async {
     await FlutterForegroundTask.updateService(
-      notificationTitle: 'Sound Detected: $soundLabel',
+      notificationTitle: '🔊 $label Detected!',
       notificationText:
-          '${(confidence * 100).toStringAsFixed(0)}% confidence '
-          '— tap to open SoundClass',
+          '${(confidence * 100).toStringAsFixed(0)}'
+          '% confidence',
     );
   }
 
-  //  Reset notification to default text
   Future<void> resetNotification() async {
     await FlutterForegroundTask.updateService(
-      notificationTitle: 'SoundClass is Active',
-      notificationText: 'Monitoring your environment for sounds...',
+      notificationTitle: 'SoundClass Active',
+      notificationText: 'Monitoring your environment...',
     );
   }
 
-  // Check if service is running
-  Future<bool> get isRunning async {
-    return await FlutterForegroundTask.isRunningService;
-  }
-}
-
-//  Background task handler
-// This runs in the background when the app is minimized
-// Aaron will add TFLite inference calls inside onRepeatEvent
-@pragma('vm:entry-point')
-void startCallback() {
-  FlutterForegroundTask.setTaskHandler(SoundDetectionTaskHandler());
+  Future<bool> get isRunning async => FlutterForegroundTask.isRunningService;
 }
 
 class SoundDetectionTaskHandler extends TaskHandler {
+  bool _started = false;
+
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
-    // Called when the foreground service starts
-    // Aaron initializes TFLite interpreter here
-    log('Background sound detection started');
+    print('TaskHandler: onStart');
+    if (_started) return;
+    _started = true;
+
+    try {
+      await AudioMLService.instance.startListening(
+        onResult: (String label, double confidence) {
+          if (confidence >= 0.85) {
+            FlutterForegroundTask.sendDataToMain({
+              'soundClass': label,
+              'confidence': confidence,
+            });
+
+            FlutterForegroundTask.updateService(
+              notificationTitle: '🔊 $label Detected!',
+              notificationText:
+                  '${(confidence * 100).toStringAsFixed(0)}% confidence',
+            );
+
+            Future.delayed(
+              const Duration(seconds: 5),
+              () => FlutterForegroundTask.updateService(
+                notificationTitle: 'SoundClass Active',
+                notificationText: 'Monitoring your environment...',
+              ),
+            );
+          }
+        },
+      );
+      print('TaskHandler: AudioML started OK');
+    } catch (e) {
+      print('TaskHandler: error: $e');
+    }
   }
 
   @override
   void onRepeatEvent(DateTime timestamp) {
-    // Called every 5000ms (set in ForegroundTaskOptions)
-    // Aaron adds audio capture + inference here
-    // When a sound is detected he calls:
-    // FlutterForegroundTask.sendDataToMain({'soundClass': 'siren', 'confidence': 0.94})
-    log('Background check running: $timestamp');
+    print('TaskHandler: heartbeat');
   }
 
   @override
   Future<void> onDestroy(DateTime timestamp) async {
-    // Called when the foreground service stops
-    // Aaron cleans up TFLite interpreter here
-    log('Background sound detection stopped');
+    print('TaskHandler: onDestroy');
+    _started = false;
+    await AudioMLService.instance.stopListening();
   }
 
   @override
   void onNotificationButtonPressed(String id) {
-    // Called when user taps the Stop Detection
-    // button in the notification
-    if (id == 'stop_detection') {
+    if (id == 'stop_btn') {
       FlutterForegroundTask.stopService();
     }
   }
 
   @override
   void onNotificationPressed() {
-    // Called when user taps the notification itself
-    // Opens the app
     FlutterForegroundTask.launchApp('/dashboard');
   }
 }

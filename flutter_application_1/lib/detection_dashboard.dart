@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'foreground_service_manager.dart';
 import 'permission_service.dart';
 import 'audio_ml_service.dart';
 import 'database_helper.dart';
+import 'background_permission_helper.dart';
 
 class DetectionDashboard extends StatefulWidget {
   const DetectionDashboard({Key? key}) : super(key: key);
@@ -21,8 +23,8 @@ class _DetectionDashboardState extends State<DetectionDashboard>
   double? _lastConfidence;
   DateTime? _lastDetectedTime;
 
-//we add this to make sure that the loop is not infinite
-  bool _isAlertWindowOpen = false; 
+  //we add this to make sure that the loop is not infinite
+  bool _isAlertWindowOpen = false;
 
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -91,12 +93,32 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
+    // Listen for data coming from the foreground service
+    FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
+
     _syncServiceState();
+  }
+
+  void _onReceiveTaskData(Object data) {
+    if (data is Map<String, dynamic>) {
+      final soundClass = data['soundClass'] as String?;
+      final confidence = data['confidence'] as double?;
+
+      if (soundClass != null &&
+          confidence != null &&
+          !_isAlertWindowOpen &&
+          mounted) {
+        _onSoundDetected(soundClass, confidence);
+      }
+    }
   }
 
   @override
   void dispose() {
+    FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
+
     _pulseController.dispose();
+
     super.dispose();
   }
 
@@ -124,7 +146,6 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     _pulseController.reset();
 
     await ForegroundServiceManager.instance.stopService();
-    AudioMLService.instance.stopListening();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -204,15 +225,20 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     setState(() => _isListening = true);
     _pulseController.repeat(reverse: true);
 
-    await ForegroundServiceManager.instance.startService();
+    final started = await ForegroundServiceManager.instance.startService();
 
-    AudioMLService.instance.startListening(
-      onResult: (String detectedClass, double confidence) {
-        if (confidence >= 0.85 && !_isAlertWindowOpen) {
-          _onSoundDetected(detectedClass, confidence);
-        }
-      },
-    );
+    if (!started) {
+      setState(() => _isListening = false);
+      _pulseController.stop();
+      _pulseController.reset();
+
+      if (mounted) {
+        // Shows brand-specific instructions
+        // automatically for any phone brand
+        await BackgroundPermissionHelper.showDialog(context);
+      }
+      return;
+    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -221,11 +247,14 @@ class _DetectionDashboardState extends State<DetectionDashboard>
             children: [
               Icon(Icons.mic_rounded, color: Colors.white, size: 18),
               SizedBox(width: 10),
-              Text('Sound detection started'),
+              Text(
+                'Detection started — '
+                'runs in background',
+              ),
             ],
           ),
           backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
+          duration: Duration(seconds: 3),
         ),
       );
     }
@@ -320,7 +349,8 @@ class _DetectionDashboardState extends State<DetectionDashboard>
 
     showDialog(
       context: context,
-      barrierDismissible: false, //this prevents closing by tapping outside the box
+      barrierDismissible:
+          false, //this prevents closing by tapping outside the box
       builder: (ctx) => AlertOverlay(
         soundLabel: config['label'] as String,
         description: config['description'] as String,
@@ -328,16 +358,16 @@ class _DetectionDashboardState extends State<DetectionDashboard>
         color: config['color'] as Color,
         confidence: confidence,
         onDismiss: () {
-          Navigator.pop(ctx); //remove the current overlay 
+          Navigator.pop(ctx); //remove the current overlay
 
-          Future.delayed(const Duration(seconds: 2), (){
-            if (mounted){
-              setState((){
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) {
+              setState(() {
                 _isAlertWindowOpen = false; //unlock the screen after 2 seconds
               });
             }
           });
-        }
+        },
       ),
     );
   }
@@ -413,10 +443,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
               _isListening
                   ? 'Detecting emergency sounds'
                   : 'Tap the button to start',
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
             ),
           ],
         ),
@@ -433,10 +460,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
           child: Center(
             child: Text(
               'No detections yet',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
             ),
           ),
         ),
@@ -453,10 +477,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: config['color'] as Color,
-            width: 2,
-          ),
+          border: Border.all(color: config['color'] as Color, width: 2),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -475,10 +496,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
                     children: [
                       Text(
                         'Last Detection',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
                       ),
                       Text(
                         config['label'] as String,
@@ -503,10 +521,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
                     ),
                     Text(
                       _formatTime(_lastDetectedTime!),
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
                     ),
                   ],
                 ),
