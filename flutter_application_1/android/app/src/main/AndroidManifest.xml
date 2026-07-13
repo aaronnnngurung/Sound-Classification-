@@ -29,8 +29,7 @@
         android:label="SoundClass"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true"
-         android:enableOnBackInvokedCallback="true">
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"
@@ -61,7 +60,7 @@
             android:value="2" />
         <!-- Foreground service for background sound detection (PB-07) -->
 <service
-    android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+    android:name="com.pravera.flutter_foreground_task.service.ForegroundTaskService"
     android:foregroundServiceType="microphone"
     android:exported="false"/>
     </application>
