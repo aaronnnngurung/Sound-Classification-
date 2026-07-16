@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'permission_service.dart';
 import 'wrapper.dart';
 
@@ -31,34 +32,29 @@ class _PermissionScreenState extends State<PermissionScreen> {
     });
   }
 
-  // Request all permissions at once
   Future<void> _requestPermissions() async {
     setState(() => _isRequesting = true);
 
-    final result = await _permService.checkAll();
+    // Request microphone explicitly
+    final micResult = await Permission.microphone.request();
+    print('Mic permission: $micResult');
 
-    // If permanently denied, send to phone settings
-    if (result.microphonePermanentlyDenied ||
-        result.notificationPermanentlyDenied) {
-      await _showPermanentlyDeniedDialog();
-      setState(() => _isRequesting = false);
-      return;
-    }
+    // Request notification explicitly
+    final notifResult = await Permission.notification.request();
+    print('Notification permission: $notifResult');
 
-    // Request whatever is not yet granted
-    await _permService.requestAll();
-
-    // Check again after requesting
-    final updated = await _permService.checkAll();
+    // Check results
     setState(() {
-      _micGranted = updated.microphoneGranted;
-      _notifGranted = updated.notificationGranted;
+      _micGranted = micResult.isGranted;
+      _notifGranted = notifResult.isGranted;
       _isRequesting = false;
     });
 
-    // If both granted, move to the app
-    if (updated.allGranted) {
+    if (_micGranted && _notifGranted) {
       _proceedToApp();
+    } else if (micResult.isPermanentlyDenied ||
+        notifResult.isPermanentlyDenied) {
+      await _showPermanentlyDeniedDialog();
     }
   }
 

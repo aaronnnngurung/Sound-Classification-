@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'foreground_service_manager.dart';
 import 'permission_service.dart';
 import 'audio_ml_service.dart';
 import 'database_helper.dart';
+import 'background_permission_helper.dart';
+import 'haptic_service.dart';
+import 'alert_notification_service.dart';
 
 class DetectionDashboard extends StatefulWidget {
   const DetectionDashboard({Key? key}) : super(key: key);
@@ -21,8 +25,8 @@ class _DetectionDashboardState extends State<DetectionDashboard>
   double? _lastConfidence;
   DateTime? _lastDetectedTime;
 
-//we add this to make sure that the loop is not infinite
-  bool _isAlertWindowOpen = false; 
+  //we add this to make sure that the loop is not infinite
+  bool _isAlertWindowOpen = false;
 
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -91,13 +95,40 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
+    // Listen for data from foreground service
+    FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
+
+    // Also set callback for fallback mode
+    ForegroundServiceManager.instance.onSoundDetected =
+        (soundClass, confidence) {
+          if (mounted && !_isAlertWindowOpen) {
+            _onSoundDetected(soundClass, confidence);
+          }
+        };
+
     _syncServiceState();
   }
 
   @override
   void dispose() {
+    FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
     _pulseController.dispose();
+    // Do NOT stop detection here
+    // Detection must continue in background
     super.dispose();
+  }
+
+  void _onReceiveTaskData(Object data) {
+    if (data is Map<String, dynamic>) {
+      final soundClass = data['soundClass'] as String?;
+      final confidence = data['confidence'] as double?;
+      if (soundClass != null &&
+          confidence != null &&
+          !_isAlertWindowOpen &&
+          mounted) {
+        _onSoundDetected(soundClass, confidence);
+      }
+    }
   }
 
   Future<void> _syncServiceState() async {
@@ -120,11 +151,11 @@ class _DetectionDashboardState extends State<DetectionDashboard>
 
   Future<void> _stopDetection() async {
     setState(() => _isListening = false);
+
     _pulseController.stop();
     _pulseController.reset();
 
     await ForegroundServiceManager.instance.stopService();
-    AudioMLService.instance.stopListening();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -144,59 +175,61 @@ class _DetectionDashboardState extends State<DetectionDashboard>
   }
 
   Future<void> _checkPermissionsThenStart() async {
-    final result = await PermissionService.instance.checkAll();
-
-    if (!result.microphoneGranted) {
+    Future<void> _showMicPermissionDialog() async {
       if (!mounted) return;
-
-      showDialog(
+      await showDialog<void>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Row(
-            children: [
-              Icon(Icons.mic_off_rounded, color: Colors.red[600]),
-              const SizedBox(width: 10),
-              const Text(
-                'Microphone Required',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
+        builder: (context) => AlertDialog(
+          title: const Text('Microphone Permission'),
           content: const Text(
-            'Sound detection needs microphone access.\n\n'
-            'Please grant microphone permission to start detecting sounds.',
-            style: TextStyle(height: 1.5),
+            'This app needs microphone access to detect sounds. Please grant the permission in app settings.',
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
             ),
-            ElevatedButton(
+            TextButton(
               onPressed: () async {
-                Navigator.pop(ctx);
-
-                final status = await PermissionService.instance
-                    .requestMicrophone();
-
-                if (status.isGranted && mounted) {
-                  await _startDetection();
-                } else if (mounted) {
-                  await PermissionService.instance.openSettings();
-                }
+                Navigator.of(context).pop();
+                await openAppSettings();
               },
-              child: const Text("Grant Permission"),
+              child: const Text('Open Settings'),
             ),
           ],
         ),
       );
-
-      return;
     }
 
+    // Step 1 — Check microphone permission
+    final micStatus = await Permission.microphone.status;
+    print('Microphone status: $micStatus');
+
+    // Step 2 — If not granted, request it NOW
+    // while we are still in the UI thread
+    // with an active Activity
+    if (!micStatus.isGranted) {
+      print('Requesting microphone permission...');
+      final result = await Permission.microphone.request();
+      print('Microphone request result: $result');
+
+      if (!result.isGranted) {
+        // User denied — show explanation
+        if (mounted) {
+          await _showMicPermissionDialog();
+        }
+        return;
+      }
+    }
+
+    // Step 3 — Also check notification permission
+    // on Android 13+
+    if (await Permission.notification.isDenied) {
+      await Permission.notification.request();
+    }
+
+    // Step 4 — Permission is now granted
+    // Safe to start the foreground service
     await _startDetection();
   }
 
@@ -204,15 +237,24 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     setState(() => _isListening = true);
     _pulseController.repeat(reverse: true);
 
-    await ForegroundServiceManager.instance.startService();
+    print('Dashboard: starting foreground service');
 
-    AudioMLService.instance.startListening(
-      onResult: (String detectedClass, double confidence) {
-        if (confidence >= 0.85 && !_isAlertWindowOpen) {
-          _onSoundDetected(detectedClass, confidence);
-        }
-      },
-    );
+    final started = await ForegroundServiceManager.instance.startService();
+
+    print('Dashboard: service started = $started');
+    print('Using fallback: ${ForegroundServiceManager.instance.usingFallback}');
+
+    if (!started) {
+      setState(() => _isListening = false);
+
+      _pulseController.stop();
+      _pulseController.reset();
+
+      if (mounted) {
+        await BackgroundPermissionHelper.showDialog(context);
+      }
+      return;
+    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -221,11 +263,11 @@ class _DetectionDashboardState extends State<DetectionDashboard>
             children: [
               Icon(Icons.mic_rounded, color: Colors.white, size: 18),
               SizedBox(width: 10),
-              Text('Sound detection started'),
+              Text('Detection started — continues in background'),
             ],
           ),
           backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
+          duration: Duration(seconds: 3),
         ),
       );
     }
@@ -261,9 +303,21 @@ class _DetectionDashboardState extends State<DetectionDashboard>
         ForegroundServiceManager.instance.resetNotification();
       }
     });
+    // PB-03 — Haptic vibration
+    // Uses native Android vibrator
+    // Works in foreground AND background
+    HapticService.instance.vibrateForSound(soundClass);
 
-    _triggerHapticForSound(soundClass);
-    _showAlertOverlay(soundClass, confidence);
+    // PB-04 — Visual alert (foreground)
+    // Full screen overlay when app is open
+    if (!_isAlertWindowOpen) {
+      _showAlertOverlay(soundClass, confidence);
+    }
+    AlertNotificationService.instance.showAlertNotification(
+      soundClass: soundClass,
+      soundLabel: config['label'] as String,
+      confidence: confidence,
+    );
   }
 
   void _triggerHapticForSound(String soundClass) {
@@ -320,7 +374,8 @@ class _DetectionDashboardState extends State<DetectionDashboard>
 
     showDialog(
       context: context,
-      barrierDismissible: false, //this prevents closing by tapping outside the box
+      barrierDismissible:
+          false, //this prevents closing by tapping outside the box
       builder: (ctx) => AlertOverlay(
         soundLabel: config['label'] as String,
         description: config['description'] as String,
@@ -328,16 +383,16 @@ class _DetectionDashboardState extends State<DetectionDashboard>
         color: config['color'] as Color,
         confidence: confidence,
         onDismiss: () {
-          Navigator.pop(ctx); //remove the current overlay 
+          Navigator.pop(ctx); //remove the current overlay
 
-          Future.delayed(const Duration(seconds: 2), (){
-            if (mounted){
-              setState((){
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) {
+              setState(() {
                 _isAlertWindowOpen = false; //unlock the screen after 2 seconds
               });
             }
           });
-        }
+        },
       ),
     );
   }
@@ -354,9 +409,49 @@ class _DetectionDashboardState extends State<DetectionDashboard>
         child: Column(
           children: [
             _buildListeningCard(),
+
+            if (_isListening && ForegroundServiceManager.instance.usingFallback)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 16, bottom: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange[300]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 16,
+                      color: Colors.orange[700],
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Running in compatibility mode. '
+                        'For full background support, '
+                        'enable Autostart in Settings.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.orange[800],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             const SizedBox(height: 24),
+
             _buildLastDetectionCard(),
+
             const SizedBox(height: 24),
+
             _buildControlButton(),
           ],
         ),
@@ -413,10 +508,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
               _isListening
                   ? 'Detecting emergency sounds'
                   : 'Tap the button to start',
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
             ),
           ],
         ),
@@ -433,10 +525,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
           child: Center(
             child: Text(
               'No detections yet',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
             ),
           ),
         ),
@@ -453,10 +542,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: config['color'] as Color,
-            width: 2,
-          ),
+          border: Border.all(color: config['color'] as Color, width: 2),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -475,10 +561,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
                     children: [
                       Text(
                         'Last Detection',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
                       ),
                       Text(
                         config['label'] as String,
@@ -503,10 +586,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
                     ),
                     Text(
                       _formatTime(_lastDetectedTime!),
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
                     ),
                   ],
                 ),

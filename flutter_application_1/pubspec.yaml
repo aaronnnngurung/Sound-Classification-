@@ -58,6 +58,8 @@ dependencies:
   #  Added flutter_foreground_task package
   flutter_foreground_task: ^8.0.1
 
+  wakelock_plus: ^1.2.8
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

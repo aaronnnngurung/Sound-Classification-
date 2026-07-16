@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:record/record.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -15,6 +16,8 @@ class AudioMLService {
   final AudioRecorder _audioRecorder = AudioRecorder();
   StreamSubscription<Uint8List>? _audioStreamSubscription;
   bool _isListening = false;
+
+  bool get isListening => _isListening;
 
   final List<String> _labels = [
     'siren',
@@ -75,16 +78,26 @@ class AudioMLService {
       return;
     }
 
-    if (!await _audioRecorder.hasPermission()) {
-      print('AudioMLService: Microphone permission denied.');
+    final hasPerm = await _audioRecorder.hasPermission();
+    print(
+      'AudioMLService: Has mic permission: '
+      '$hasPerm',
+    );
+
+    if (!hasPerm) {
+      print(
+        'AudioMLService: No mic permission — '
+        'permission should have been granted '
+        'before service started',
+      );
       return;
     }
-
     _isListening = true;
     _audioBuffer.clear();
     print('AudioMLService: Starting microphone stream.');
 
     try {
+      print("==== ABOUT TO START STREAM ====");
       final audioStream = await _audioRecorder.startStream(
         const RecordConfig(
           encoder: AudioEncoder.pcm16bits,
@@ -92,6 +105,8 @@ class AudioMLService {
           numChannels: 1,
         ),
       );
+
+      print("==== STREAM STARTED ====");
 
       _audioStreamSubscription = audioStream.listen((Uint8List chunk) {
         if (!_isListening) return;
@@ -122,15 +137,40 @@ class AudioMLService {
     }
   }
 
-  void _runInference(
-    Function(String classLabel, double confidence) onResult,
-  ) {
+  void _runInference(Function(String classLabel, double confidence) onResult) {
     if (_interpreter == null) return;
 
     try {
       List<double> clip = _audioBuffer.sublist(0, _clipSamples);
       _audioBuffer.removeRange(0, _clipSamples ~/ 2);
 
+      // ── Silence check ──────────────────────────
+      // Calculate RMS (root mean square) volume
+      // of the audio chunk
+      // If too quiet, skip inference entirely
+      // This prevents false positives on silence
+      double sumSquares = 0.0;
+      for (final sample in clip) {
+        sumSquares += sample * sample;
+      }
+      final rms = math.sqrt(sumSquares / clip.length);
+      print(
+        'Audio RMS level: '
+        '${rms.toStringAsFixed(6)}',
+      );
+
+      // If RMS is below threshold, audio is silence
+      // Typical ambient noise RMS is below 0.01
+      // Real emergency sounds are above 0.02
+      if (rms < 0.015) {
+        print(
+          'Audio too quiet — skipping inference'
+          ' (RMS: ${rms.toStringAsFixed(6)})',
+        );
+        return;
+      }
+
+      // ── Continue with mel spectrogram ──────────
       List<List<double>> melSpectrogramDb = _computeMelSpectrogramDb(clip);
       melSpectrogramDb = _padOrTrim(melSpectrogramDb, _maxPadLen);
 
@@ -166,7 +206,9 @@ class AudioMLService {
 
       if (bestMatchIndex != -1 && bestMatchIndex < _labels.length) {
         String detectedLabel = _labels[bestMatchIndex];
-        print('AudioMLService: Predicted $detectedLabel (${(highestConfidence * 100).toStringAsFixed(1)}%)');
+        print(
+          'AudioMLService: Predicted $detectedLabel (${(highestConfidence * 100).toStringAsFixed(1)}%)',
+        );
         onResult(detectedLabel, highestConfidence);
       }
     } catch (e) {
@@ -261,7 +303,10 @@ class AudioMLService {
     return melSpectrogramDb;
   }
 
-  List<List<double>> _padOrTrim(List<List<double>> spectrogram, int targetLength) {
+  List<List<double>> _padOrTrim(
+    List<List<double>> spectrogram,
+    int targetLength,
+  ) {
     final currentLength = spectrogram[0].length;
 
     if (currentLength == targetLength) {
@@ -372,7 +417,9 @@ class AudioMLService {
 
         if (bin >= leftBin && bin <= centerBin && centerBin != leftBin) {
           weight = (bin - leftBin) / (centerBin - leftBin);
-        } else if (bin > centerBin && bin <= rightBin && rightBin != centerBin) {
+        } else if (bin > centerBin &&
+            bin <= rightBin &&
+            rightBin != centerBin) {
           weight = (rightBin - bin) / (rightBin - centerBin);
         }
 
