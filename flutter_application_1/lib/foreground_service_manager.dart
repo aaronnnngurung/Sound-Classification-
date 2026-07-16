@@ -115,16 +115,22 @@ class ForegroundServiceManager {
       // Start audio in main isolate
       await AudioMLService.instance.startListening(
         onResult: (label, confidence) {
-          print(
-            'Fallback detected: $label '
-            '($confidence)',
-          );
-          if (confidence >= 0.92) {
-            HapticService.instance.vibrateForSound(label);
-            onSoundDetected?.call(label, confidence);
-            _updateFallbackNotification(label, confidence);
-          }
-        },
+        print(
+          'Fallback detected: $label '
+          '(${(confidence * 100).toStringAsFixed(1)}%)',
+        );
+
+        bool detected =
+            (label == 'car_horn' || label == 'fireworks')
+                ? confidence >= 0.95
+                : confidence >= 0.80;
+
+        if (!detected) return;
+
+        HapticService.instance.vibrateForSound(label);
+        onSoundDetected?.call(label, confidence);
+        _updateFallbackNotification(label, confidence);
+},
       );
 
       print('Fallback mode started OK');
@@ -272,17 +278,23 @@ class SoundDetectionTaskHandler extends TaskHandler {
 
     if (!AudioMLService.instance.isListening) {
       print('TaskHandler: restarting audio...');
-      AudioMLService.instance.startListening(
-        onResult: (label, confidence) {
-          if (confidence >= 0.92) {
-            HapticService.instance.vibrateForSound(label);
-            FlutterForegroundTask.sendDataToMain({
-              'soundClass': label,
-              'confidence': confidence,
-            });
-          }
-        },
-      );
+     AudioMLService.instance.startListening(
+      onResult: (label, confidence) {
+        bool detected =
+            (label == 'car_horn' || label == 'fireworks')
+                ? confidence >= 0.95
+                : confidence >= 0.80;
+
+        if (!detected) return;
+
+        HapticService.instance.vibrateForSound(label);
+
+        FlutterForegroundTask.sendDataToMain({
+          'soundClass': label,
+          'confidence': confidence,
+        });
+      },
+    );
     }
   }
 
