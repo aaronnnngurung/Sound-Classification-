@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'foreground_service_manager.dart';
 import 'permission_service.dart';
-import 'audio_ml_service.dart';
 import 'database_helper.dart';
 import 'background_permission_helper.dart';
 import 'haptic_service.dart';
@@ -38,12 +37,6 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       'color': Colors.red[600],
       'description': 'Emergency vehicle detected nearby',
     },
-    'crying_baby': {
-      'label': 'Baby Crying',
-      'icon': Icons.child_care_rounded,
-      'color': Colors.orange[600],
-      'description': 'Infant crying detected',
-    },
     'car_horn': {
       'label': 'Car Horn',
       'icon': Icons.directions_car_rounded,
@@ -67,12 +60,6 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       'icon': Icons.alarm_rounded,
       'color': Colors.blue[700],
       'description': 'Alarm clock detected',
-    },
-    'train': {
-      'label': 'Train',
-      'icon': Icons.train_rounded,
-      'color': Colors.teal[600],
-      'description': 'Train sound detected',
     },
     'fireworks': {
       'label': 'Fireworks',

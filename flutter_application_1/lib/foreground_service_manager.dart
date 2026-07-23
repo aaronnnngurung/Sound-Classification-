@@ -125,7 +125,7 @@ class ForegroundServiceManager {
                 ? confidence >= 0.95
                 : confidence >= 0.80;
 
-        if (!detected) return;
+        if (!AudioMLService.isDetectionValid(label, confidence)) return;
 
         HapticService.instance.vibrateForSound(label);
         onSoundDetected?.call(label, confidence);
@@ -242,7 +242,7 @@ class SoundDetectionTaskHandler extends TaskHandler {
     try {
       await AudioMLService.instance.startListening(
         onResult: (label, confidence) {
-          if (confidence >= 0.92) {
+          if (AudioMLService.isDetectionValid(label, confidence)) {
             HapticService.instance.vibrateForSound(label);
             FlutterForegroundTask.sendDataToMain({
               'soundClass': label,
@@ -285,7 +285,7 @@ class SoundDetectionTaskHandler extends TaskHandler {
                 ? confidence >= 0.95
                 : confidence >= 0.80;
 
-        if (!detected) return;
+        if (!AudioMLService.isDetectionValid(label, confidence)) return;
 
         HapticService.instance.vibrateForSound(label);
 

@@ -25,10 +25,14 @@ class AudioMLService {
     'door_wood_knock',
     'glass_breaking',
     'fireworks',
-    'clock_alarm',
     'car_horn',
-    'train',
   ];
+
+  static bool isDetectionValid(String label, double confidence) {
+    const highConfidenceClasses = {'car_horn', 'fireworks'};
+    final threshold = highConfidenceClasses.contains(label) ? 0.95 : 0.80;
+    return confidence >= threshold;
+  }
 
   // Must match training notebook constants
   static const int _sampleRate = 22050;
@@ -54,6 +58,9 @@ class AudioMLService {
 
       final inputShape = _interpreter!.getInputTensor(0).shape;
       print('AudioMLService: Input shape: $inputShape');
+
+      final outputShape = _interpreter!.getOutputTensor(0).shape;
+      print('AudioMLService: Output shape: $outputShape');
 
       _melFilterBank = _buildMelFilterBank(
         sampleRate: _sampleRate,
@@ -209,7 +216,9 @@ class AudioMLService {
         print(
           'AudioMLService: Predicted $detectedLabel (${(highestConfidence * 100).toStringAsFixed(1)}%)',
         );
-        onResult(detectedLabel, highestConfidence);
+        if (isDetectionValid(detectedLabel, highestConfidence)) {
+          onResult(detectedLabel, highestConfidence);
+        }
       }
     } catch (e) {
       print('AudioMLService: Inference error: $e');
