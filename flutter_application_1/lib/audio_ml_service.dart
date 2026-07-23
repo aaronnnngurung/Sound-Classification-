@@ -53,7 +53,7 @@ class AudioMLService {
     try {
       print('AudioMLService: Loading model...');
       _interpreter = await Interpreter.fromAsset(
-        'assets/models/emergency_audio_classifier.tflite',
+        'assets/models/audio_model.tflite',
       );
 
       final inputShape = _interpreter!.getInputTensor(0).shape;

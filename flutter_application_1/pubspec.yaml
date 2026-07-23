@@ -89,6 +89,7 @@ flutter:
     - assets/image.png
     - assets/logo.png
     - assets/models/emergency_audio_classifier.tflite
+    - assets/models/audio_model.tflite
     
   # To add assets to your application, add an assets section, like this:
   # assets:
