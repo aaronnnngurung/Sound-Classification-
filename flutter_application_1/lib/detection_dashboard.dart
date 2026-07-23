@@ -37,6 +37,12 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       'color': Colors.red[600],
       'description': 'Emergency vehicle detected nearby',
     },
+    'crying_baby': {
+      'label': 'Crying Baby',
+      'icon': Icons.child_care_rounded,
+      'color': Colors.orange[700],
+      'description': 'Baby crying detected',
+    },
     'car_horn': {
       'label': 'Car Horn',
       'icon': Icons.directions_car_rounded,
@@ -54,12 +60,6 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       'icon': Icons.door_front_door_rounded,
       'color': Colors.brown[600],
       'description': 'Knocking sound detected',
-    },
-    'clock_alarm': {
-      'label': 'Clock Alarm',
-      'icon': Icons.alarm_rounded,
-      'color': Colors.blue[700],
-      'description': 'Alarm clock detected',
     },
     'fireworks': {
       'label': 'Fireworks',

@@ -6,8 +6,6 @@ import 'package:record/record.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:fftea/fftea.dart';
 
-// Singleton service for audio classification.
-// All constants below must match exactly with the training notebook.
 class AudioMLService {
   static final AudioMLService instance = AudioMLService._internal();
   AudioMLService._internal();
@@ -19,6 +17,7 @@ class AudioMLService {
 
   bool get isListening => _isListening;
 
+  // MUST match the exact order of the 12 output classes from your training model
   final List<String> _labels = [
     'siren',
     'crying_baby',
@@ -26,15 +25,35 @@ class AudioMLService {
     'glass_breaking',
     'fireworks',
     'car_horn',
+    'keyboard_typing',
+    'clock_tick',
+    'rain',
+    'breathing',
+    'chirping_birds',
+    'laughing',
   ];
 
   static bool isDetectionValid(String label, double confidence) {
-    const highConfidenceClasses = {'car_horn', 'fireworks'};
-    final threshold = highConfidenceClasses.contains(label) ? 0.95 : 0.80;
+    const emergencyClasses = {
+      'siren',
+      'crying_baby',
+      'door_wood_knock',
+      'glass_breaking',
+      'fireworks',
+      'car_horn',
+    };
+
+    // Ignore non-emergency background classes completely
+    if (!emergencyClasses.contains(label)) return false;
+
+    // Short transient sounds dilute across a 5-second buffer (lower threshold needed)
+    const transientClasses = {'glass_breaking', 'door_wood_knock', 'fireworks'};
+    final double threshold = transientClasses.contains(label) ? 0.45 : 0.65;
+
     return confidence >= threshold;
   }
 
-  // Must match training notebook constants
+  // Audio parameters
   static const int _sampleRate = 22050;
   static const int _clipDurationSeconds = 5;
   static const int _clipSamples = _sampleRate * _clipDurationSeconds; // 110250
@@ -53,14 +72,8 @@ class AudioMLService {
     try {
       print('AudioMLService: Loading model...');
       _interpreter = await Interpreter.fromAsset(
-        'assets/models/audio_model.tflite',
+        'assets/models/finalmodel.tflite',
       );
-
-      final inputShape = _interpreter!.getInputTensor(0).shape;
-      print('AudioMLService: Input shape: $inputShape');
-
-      final outputShape = _interpreter!.getOutputTensor(0).shape;
-      print('AudioMLService: Output shape: $outputShape');
 
       _melFilterBank = _buildMelFilterBank(
         sampleRate: _sampleRate,
@@ -80,31 +93,15 @@ class AudioMLService {
     if (_isListening) return;
 
     await _loadModel();
-    if (_interpreter == null) {
-      print('AudioMLService: Model failed to load.');
-      return;
-    }
+    if (_interpreter == null) return;
 
     final hasPerm = await _audioRecorder.hasPermission();
-    print(
-      'AudioMLService: Has mic permission: '
-      '$hasPerm',
-    );
+    if (!hasPerm) return;
 
-    if (!hasPerm) {
-      print(
-        'AudioMLService: No mic permission — '
-        'permission should have been granted '
-        'before service started',
-      );
-      return;
-    }
     _isListening = true;
     _audioBuffer.clear();
-    print('AudioMLService: Starting microphone stream.');
 
     try {
-      print("==== ABOUT TO START STREAM ====");
       final audioStream = await _audioRecorder.startStream(
         const RecordConfig(
           encoder: AudioEncoder.pcm16bits,
@@ -112,8 +109,6 @@ class AudioMLService {
           numChannels: 1,
         ),
       );
-
-      print("==== STREAM STARTED ====");
 
       _audioStreamSubscription = audioStream.listen((Uint8List chunk) {
         if (!_isListening) return;
@@ -151,33 +146,17 @@ class AudioMLService {
       List<double> clip = _audioBuffer.sublist(0, _clipSamples);
       _audioBuffer.removeRange(0, _clipSamples ~/ 2);
 
-      // ── Silence check ──────────────────────────
-      // Calculate RMS (root mean square) volume
-      // of the audio chunk
-      // If too quiet, skip inference entirely
-      // This prevents false positives on silence
+      // RMS Silence check (0.008 threshold catches quiet transient impacts)
       double sumSquares = 0.0;
       for (final sample in clip) {
         sumSquares += sample * sample;
       }
       final rms = math.sqrt(sumSquares / clip.length);
-      print(
-        'Audio RMS level: '
-        '${rms.toStringAsFixed(6)}',
-      );
 
-      // If RMS is below threshold, audio is silence
-      // Typical ambient noise RMS is below 0.01
-      // Real emergency sounds are above 0.02
-      if (rms < 0.015) {
-        print(
-          'Audio too quiet — skipping inference'
-          ' (RMS: ${rms.toStringAsFixed(6)})',
-        );
+      if (rms < 0.008) {
         return;
       }
 
-      // ── Continue with mel spectrogram ──────────
       List<List<double>> melSpectrogramDb = _computeMelSpectrogramDb(clip);
       melSpectrogramDb = _padOrTrim(melSpectrogramDb, _maxPadLen);
 
@@ -225,7 +204,6 @@ class AudioMLService {
     }
   }
 
-  // Computes mel-spectrogram in dB, matching librosa exactly.
   List<List<double>> _computeMelSpectrogramDb(List<double> audio) {
     final paddedAudio = _reflectPad(audio, _nFft ~/ 2);
     final hannWindow = _hannWindow(_nFft);
@@ -449,8 +427,6 @@ class AudioMLService {
   Future<void> stopListening() async {
     if (!_isListening) return;
     _isListening = false;
-
-    print('AudioMLService: Stopping stream.');
 
     await _audioStreamSubscription?.cancel();
     _audioStreamSubscription = null;

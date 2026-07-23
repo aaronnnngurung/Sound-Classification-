@@ -100,37 +100,22 @@ class ForegroundServiceManager {
   // Fallback: run in main isolate with wake lock
   // This keeps detection running even on Xiaomi
   // as long as the app is not fully killed
-  Future<bool> _startFallbackMode() async {
+Future<bool> _startFallbackMode() async {
     print('Starting fallback mode...');
     _usingFallback = true;
 
     try {
-      // Keep CPU awake
       await WakelockPlus.enable();
-      print('Wake lock enabled');
-
-      // Show notification via platform channel
       await _showFallbackNotification();
 
-      // Start audio in main isolate
       await AudioMLService.instance.startListening(
         onResult: (label, confidence) {
-        print(
-          'Fallback detected: $label '
-          '(${(confidence * 100).toStringAsFixed(1)}%)',
-        );
+          if (!AudioMLService.isDetectionValid(label, confidence)) return;
 
-        bool detected =
-            (label == 'car_horn' || label == 'fireworks')
-                ? confidence >= 0.95
-                : confidence >= 0.80;
-
-        if (!AudioMLService.isDetectionValid(label, confidence)) return;
-
-        HapticService.instance.vibrateForSound(label);
-        onSoundDetected?.call(label, confidence);
-        _updateFallbackNotification(label, confidence);
-},
+          HapticService.instance.vibrateForSound(label);
+          onSoundDetected?.call(label, confidence);
+          _updateFallbackNotification(label, confidence);
+        },
       );
 
       print('Fallback mode started OK');
@@ -270,6 +255,7 @@ class SoundDetectionTaskHandler extends TaskHandler {
   }
 
   @override
+  @override
   void onRepeatEvent(DateTime timestamp) {
     print(
       'TaskHandler: heartbeat — '
@@ -278,23 +264,18 @@ class SoundDetectionTaskHandler extends TaskHandler {
 
     if (!AudioMLService.instance.isListening) {
       print('TaskHandler: restarting audio...');
-     AudioMLService.instance.startListening(
-      onResult: (label, confidence) {
-        bool detected =
-            (label == 'car_horn' || label == 'fireworks')
-                ? confidence >= 0.95
-                : confidence >= 0.80;
+      AudioMLService.instance.startListening(
+        onResult: (label, confidence) {
+          if (!AudioMLService.isDetectionValid(label, confidence)) return;
 
-        if (!AudioMLService.isDetectionValid(label, confidence)) return;
+          HapticService.instance.vibrateForSound(label);
 
-        HapticService.instance.vibrateForSound(label);
-
-        FlutterForegroundTask.sendDataToMain({
-          'soundClass': label,
-          'confidence': confidence,
-        });
-      },
-    );
+          FlutterForegroundTask.sendDataToMain({
+            'soundClass': label,
+            'confidence': confidence,
+          });
+        },
+      );
     }
   }
 
