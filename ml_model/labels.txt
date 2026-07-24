@@ -4,13 +4,3 @@ door_wood_knock
 glass_breaking
 fireworks
 car_horn
-keyboard_typing
-footsteps
-clock_tick
-mouse_click
-rain
-wind
-breathing
-chirping_birds
-washing_machine
-laughing
