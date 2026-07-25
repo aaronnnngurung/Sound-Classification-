@@ -12,7 +12,7 @@ import numpy as np
 import librosa
 import sounddevice as sd
 import soundfile as sf
-import imageio_ffmpeg  # <-- Portable FFmpeg binary getter
+import imageio_ffmpeg  # Portable FFmpeg binary getter
 
 from config import (
     SAMPLE_RATE,
@@ -139,6 +139,26 @@ def fix_audio_length(audio):
         )
 
     return audio
+
+
+# --------------------------------------------------------
+# Calculate Volume Energy (RMS)
+# --------------------------------------------------------
+
+def calculate_rms(audio):
+    """
+    Calculate Root Mean Square (RMS) energy of raw audio.
+    Used for silence/low-volume gate checks.
+    """
+    return float(np.sqrt(np.mean(np.square(audio))))
+
+
+def get_audio_rms(audio_path):
+    """
+    Convenience function to load audio and get RMS energy value.
+    """
+    audio = load_audio(audio_path)
+    return calculate_rms(audio)
 
 
 # --------------------------------------------------------

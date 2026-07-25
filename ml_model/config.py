@@ -26,7 +26,7 @@ RECORDINGS_DIR.mkdir(exist_ok=True)
 # AUDIO CONFIGURATION
 # ==========================================================
 
-# These should match your training notebook
+# These match your training notebook parameters
 SAMPLE_RATE = 22050
 DURATION = 5                # seconds
 N_MELS = 64
@@ -41,7 +41,7 @@ SAMPLES = SAMPLE_RATE * DURATION
 MODEL_INPUT_SHAPE = (64, 216, 1)
 
 # ==========================================================
-# CLASS LABELS
+# CLASS LABELS (7 CLASSES)
 # ==========================================================
 
 CLASS_NAMES = [
@@ -50,10 +50,14 @@ CLASS_NAMES = [
     "door_wood_knock",
     "glass_breaking",
     "fireworks",
-    "car_horn"
+    "car_horn",
+    "background"  # 7th class for silence & non-emergency noise
 ]
 
 NUM_CLASSES = len(CLASS_NAMES)
+
+# First 6 classes actively trigger emergency warnings
+EMERGENCY_CLASSES = set(CLASS_NAMES[:6])
 
 # ==========================================================
 # STREAMLIT SETTINGS
@@ -84,7 +88,8 @@ PROGRESS_COLORS = {
     "door_wood_knock": "#A2845E",
     "glass_breaking": "#30D158",
     "fireworks": "#BF5AF2",
-    "car_horn": "#FF9500"
+    "car_horn": "#FF9500",
+    "background": "#8E8E93"
 }
 
 EMOJI = {
@@ -93,23 +98,24 @@ EMOJI = {
     "door_wood_knock": "🚪",
     "glass_breaking": "🪟",
     "fireworks": "🎆",
-    "car_horn": "🚗"
+    "car_horn": "🚗",
+    "background": "🍃"
 }
 
 # ==========================================================
-# RECORDING SETTINGS
+# RECORDING & INFERENCE SETTINGS
 # ==========================================================
 
 DEFAULT_RECORD_SECONDS = 5
-
 REALTIME_INTERVAL = 5      # Automatically analyze every 5 seconds
-
 CHANNELS = 1
-
 DTYPE = "float32"
 
+# RMS Silence threshold (Audio below this volume is instantly treated as background)
+DEFAULT_RMS_THRESHOLD = 0.015
+
 # ==========================================================
-# CONFIDENCE
+# CONFIDENCE THRESHOLDS
 # ==========================================================
 
 HIGH_CONFIDENCE = 0.90
