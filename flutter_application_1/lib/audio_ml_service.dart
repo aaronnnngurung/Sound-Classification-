@@ -17,7 +17,11 @@ class AudioMLService {
 
   bool get isListening => _isListening;
 
-  // MUST match the exact order of the 12 output classes from your training model
+  // MUST match ALL_CLASSES order from the training notebook exactly —
+  // this is the order labels.txt was exported in. The new model outputs
+  // 6 classes (emergency-only, INCLUDE_NEGATIVE_CLASSES=False). If/when
+  // negative classes get reintroduced in training, this list AND the
+  // model asset below both need to be updated together.
   final List<String> _labels = [
     'siren',
     'crying_baby',
@@ -25,12 +29,6 @@ class AudioMLService {
     'glass_breaking',
     'fireworks',
     'car_horn',
-    'keyboard_typing',
-    'clock_tick',
-    'rain',
-    'breathing',
-    'chirping_birds',
-    'laughing',
   ];
 
   static bool isDetectionValid(String label, double confidence) {
@@ -43,17 +41,37 @@ class AudioMLService {
       'car_horn',
     };
 
-    // Ignore non-emergency background classes completely
+    // Ignore non-emergency background classes completely. With the
+    // current 6-class emergency-only model every output IS an emergency
+    // class, so this is a no-op today — but it's left in place so this
+    // still behaves correctly if/when negative classes get added back
+    // to the model without anyone remembering to touch this file.
     if (!emergencyClasses.contains(label)) return false;
 
-    // Short transient sounds dilute across a 5-second buffer (lower threshold needed)
-    const transientClasses = {'glass_breaking', 'door_wood_knock', 'fireworks'};
-    final double threshold = transientClasses.contains(label) ? 0.45 : 0.65;
+    // Short transient sounds dilute across a 5-second buffer, so they
+    // legitimately need a lower bar or real hits get missed.
+    const looseTransientClasses = {'glass_breaking', 'door_wood_knock'};
 
-    return confidence >= threshold;
+    // Fireworks gets its OWN, stricter bucket. Real-mic testing showed
+    // it acting as a leak destination — misclassified door_wood_knock
+    // clips (both short, percussive, transient sounds) were landing
+    // here at high confidence. Rather than lumping it in with the other
+    // transients at a lenient threshold (which would make that leak
+    // worse), it requires much higher confidence before we act on it.
+    const strictTransientClasses = {'fireworks'};
+
+    if (strictTransientClasses.contains(label)) {
+      return confidence >= 0.80;
+    }
+    if (looseTransientClasses.contains(label)) {
+      return confidence >= 0.45;
+    }
+    return confidence >= 0.65;
   }
 
-  // Audio parameters
+  // Audio parameters — MUST match the training notebook's Section 2
+  // constants exactly (SR, DURATION, N_MELS, N_FFT, HOP_LENGTH, TOP_DB,
+  // MAX_PAD_LEN). Do not change independently of the model.
   static const int _sampleRate = 22050;
   static const int _clipDurationSeconds = 5;
   static const int _clipSamples = _sampleRate * _clipDurationSeconds; // 110250
@@ -71,8 +89,12 @@ class AudioMLService {
 
     try {
       print('AudioMLService: Loading model...');
+      // NOTE: point this at whatever you name the new .tflite export
+      // (the notebook currently writes "emergency_audio_classifier.tflite").
+      // Make sure the file is added under assets/models/ AND declared
+      // in pubspec.yaml before running.
       _interpreter = await Interpreter.fromAsset(
-        'assets/models/finalmodel.tflite',
+        'assets/models/emergency_audio_classifier.tflite',
       );
 
       _melFilterBank = _buildMelFilterBank(
@@ -153,12 +175,22 @@ class AudioMLService {
       }
       final rms = math.sqrt(sumSquares / clip.length);
 
+      // Temporary while tuning: watch these values against real quiet
+      // emergency sounds (distant siren, soft knock) to make sure 0.008
+      // isn't gating out anything real — recall matters more than saving
+      // a few inference calls here. Remove once you're confident in the
+      // threshold.
+      print('AudioMLService: clip RMS = ${rms.toStringAsFixed(4)}');
+
       if (rms < 0.008) {
         return;
       }
 
       List<List<double>> melSpectrogramDb = _computeMelSpectrogramDb(clip);
       melSpectrogramDb = _padOrTrim(melSpectrogramDb, _maxPadLen);
+      // Notebook standardizes AFTER padding — order matters, since the
+      // padded zero region is included in the mean/std calculation.
+      melSpectrogramDb = _standardize(melSpectrogramDb);
 
       var inputTensor = List.generate(
         1,
@@ -205,7 +237,12 @@ class AudioMLService {
   }
 
   List<List<double>> _computeMelSpectrogramDb(List<double> audio) {
-    final paddedAudio = _reflectPad(audio, _nFft ~/ 2);
+    // librosa's melspectrogram->stft defaults to center=True with
+    // pad_mode="constant" (zero-padding) as of librosa >= 0.9.0. Older
+    // librosa (<0.9) defaulted to "reflect" instead. This MUST match
+    // whatever librosa version the training notebook actually used —
+    // check with `import librosa; print(librosa.__version__)`.
+    final paddedAudio = _zeroPad(audio, _nFft ~/ 2);
     final hannWindow = _hannWindow(_nFft);
 
     final fft = FFT(_nFft);
@@ -310,24 +347,59 @@ class AudioMLService {
     return spectrogram.map((row) => row.sublist(0, targetLength)).toList();
   }
 
-  List<double> _reflectPad(List<double> audio, int padSize) {
-    final leftPadding = List.generate(
-      padSize,
-      (i) => audio[(padSize - i).clamp(0, audio.length - 1)],
-    );
-
-    final rightPadding = List.generate(
-      padSize,
-      (i) => audio[(audio.length - 2 - i).clamp(0, audio.length - 1)],
-    );
-
-    return [...leftPadding, ...audio, ...rightPadding];
+  // Zero-pad both edges. Matches librosa >= 0.9.0's default
+  // pad_mode="constant" for centered STFT framing. If your notebook is
+  // on librosa < 0.9, swap this back to reflect-padding (see comment at
+  // the call site) — the two are NOT numerically interchangeable, only
+  // one of them matches whatever produced your trained model.
+  List<double> _zeroPad(List<double> audio, int padSize) {
+    return [
+      ...List<double>.filled(padSize, 0.0),
+      ...audio,
+      ...List<double>.filled(padSize, 0.0),
+    ];
   }
 
+  // Per-clip standardization: zero mean, unit variance — MUST mirror the
+  // notebook's process_audio_to_mel exactly:
+  //   mean = np.mean(mel_spec_db); std = np.std(mel_spec_db)
+  //   mel_spec_db = (mel_spec_db - mean) / (std + 1e-6)
+  // Run AFTER padding/trimming to MAX_PAD_LEN, since the padded region
+  // is included in the mean/std the model was trained against.
+  List<List<double>> _standardize(List<List<double>> melDb) {
+    double sum = 0.0;
+    int count = 0;
+    for (final row in melDb) {
+      for (final v in row) {
+        sum += v;
+        count++;
+      }
+    }
+    final mean = sum / count;
+
+    double sqSum = 0.0;
+    for (final row in melDb) {
+      for (final v in row) {
+        final d = v - mean;
+        sqSum += d * d;
+      }
+    }
+    final std = math.sqrt(sqSum / count);
+
+    return melDb
+        .map((row) => row.map((v) => (v - mean) / (std + 1e-6)).toList())
+        .toList();
+  }
+
+  // Periodic Hann window (denominator = length, not length-1). This
+  // matches librosa/scipy's default get_window(..., fftbins=True), used
+  // internally by librosa.stft. The symmetric variant (length-1) is a
+  // different, slightly-mismatched window shape — small numerically,
+  // but there's no reason to leave a real mismatch in place.
   Float64List _hannWindow(int length) {
     final window = Float64List(length);
     for (int i = 0; i < length; i++) {
-      window[i] = 0.5 - 0.5 * cos(2 * pi * i / (length - 1));
+      window[i] = 0.5 - 0.5 * cos(2 * pi * i / length);
     }
     return window;
   }
@@ -385,8 +457,11 @@ class AudioMLService {
     );
 
     final hertzPoints = melPoints.map(melToHertz).toList();
+    // librosa's fft_frequencies are bin_index * sr / n_fft (no "+1" —
+    // that's a different, HTK-style convention). Matching this exactly
+    // makes the triangular filters mathematically identical to librosa's.
     final binPoints = hertzPoints
-        .map((hertz) => (fftSize + 1) * hertz / sampleRate)
+        .map((hertz) => fftSize * hertz / sampleRate)
         .toList();
 
     final filters = List.generate(

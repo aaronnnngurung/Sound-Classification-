@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -162,7 +161,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
   }
 
   Future<void> _checkPermissionsThenStart() async {
-    Future<void> _showMicPermissionDialog() async {
+    Future<void> showMicPermissionDialog() async {
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -203,7 +202,7 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       if (!result.isGranted) {
         // User denied — show explanation
         if (mounted) {
-          await _showMicPermissionDialog();
+          await showMicPermissionDialog();
         }
         return;
       }
@@ -260,6 +259,12 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     }
   }
 
+  // NOTE: haptic feedback is intentionally NOT triggered here. It's
+  // handled entirely by the service layer (ForegroundServiceManager /
+  // SoundDetectionTaskHandler in foreground_service_manager.dart), which
+  // is the one code path guaranteed to run whether or not this dashboard
+  // is open. Calling HapticService here too would double-vibrate on
+  // every single detection — which was happening before this fix.
   void _onSoundDetected(String soundClass, double confidence) {
     setState(() {
       _lastDetectedSound = soundClass;
@@ -290,65 +295,19 @@ class _DetectionDashboardState extends State<DetectionDashboard>
         ForegroundServiceManager.instance.resetNotification();
       }
     });
-    // PB-03 — Haptic vibration
-    // Uses native Android vibrator
-    // Works in foreground AND background
-    HapticService.instance.vibrateForSound(soundClass);
 
     // PB-04 — Visual alert (foreground)
     // Full screen overlay when app is open
     if (!_isAlertWindowOpen) {
       _showAlertOverlay(soundClass, confidence);
     }
+    if(WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed){
     AlertNotificationService.instance.showAlertNotification(
       soundClass: soundClass,
       soundLabel: config['label'] as String,
       confidence: confidence,
     );
   }
-
-  void _triggerHapticForSound(String soundClass) {
-    switch (soundClass) {
-      case 'siren':
-        HapticFeedback.heavyImpact();
-        Future.delayed(
-          const Duration(milliseconds: 200),
-          HapticFeedback.heavyImpact,
-        );
-        Future.delayed(
-          const Duration(milliseconds: 400),
-          HapticFeedback.heavyImpact,
-        );
-        break;
-
-      case 'crying_baby':
-        HapticFeedback.mediumImpact();
-        Future.delayed(
-          const Duration(milliseconds: 300),
-          HapticFeedback.mediumImpact,
-        );
-        break;
-
-      case 'car_horn':
-        HapticFeedback.heavyImpact();
-        break;
-
-      case 'glass_breaking':
-        HapticFeedback.lightImpact();
-        Future.delayed(
-          const Duration(milliseconds: 100),
-          HapticFeedback.lightImpact,
-        );
-        Future.delayed(
-          const Duration(milliseconds: 200),
-          HapticFeedback.lightImpact,
-        );
-        break;
-
-      default:
-        HapticFeedback.lightImpact();
-        break;
-    }
   }
 
   void _showAlertOverlay(String soundClass, double confidence) {

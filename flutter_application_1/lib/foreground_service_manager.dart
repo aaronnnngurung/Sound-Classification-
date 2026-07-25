@@ -1,5 +1,7 @@
 // foreground_service_manager.dart
 import 'dart:async';
+import 'dart:ui'; // Add this for DartPluginRegistrant
+import 'package:flutter/widgets.dart'; // Add this for WidgetsFlutterBinding
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -8,6 +10,10 @@ import 'haptic_service.dart';
 
 @pragma('vm:entry-point')
 void startCallback() {
+
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+
   FlutterForegroundTask.setTaskHandler(SoundDetectionTaskHandler());
 }
 
@@ -100,7 +106,13 @@ class ForegroundServiceManager {
   // Fallback: run in main isolate with wake lock
   // This keeps detection running even on Xiaomi
   // as long as the app is not fully killed
-Future<bool> _startFallbackMode() async {
+  //
+  // NOTE: haptic feedback is fired HERE, once, in the service layer —
+  // not in the dashboard. The dashboard receives detections purely for
+  // display (UI, DB logging, notification text) via onSoundDetected.
+  // Firing haptics in both places was causing a double-vibration on
+  // every single detection.
+  Future<bool> _startFallbackMode() async {
     print('Starting fallback mode...');
     _usingFallback = true;
 
@@ -218,6 +230,33 @@ Future<bool> _startFallbackMode() async {
 class SoundDetectionTaskHandler extends TaskHandler {
   bool _started = false;
 
+  // Shared by both the initial start and the heartbeat-triggered
+  // restart, so a mid-session restart behaves identically to a normal
+  // start (same haptic + notification-title behavior) instead of two
+  // handlers slowly drifting apart.
+  void _handleDetection(String label, double confidence) {
+    if (!AudioMLService.isDetectionValid(label, confidence)) return;
+
+    HapticService.instance.vibrateForSound(label);
+
+    FlutterForegroundTask.sendDataToMain({
+      'soundClass': label,
+      'confidence': confidence,
+    });
+
+    FlutterForegroundTask.updateService(
+      notificationTitle: '🔊 $label Detected!',
+      notificationText: '${(confidence * 100).toStringAsFixed(0)}% confidence',
+    );
+    Future.delayed(
+      const Duration(seconds: 5),
+      () => FlutterForegroundTask.updateService(
+        notificationTitle: 'SoundClass Active',
+        notificationText: 'Monitoring your environment...',
+      ),
+    );
+  }
+
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     print('TaskHandler: onStart');
@@ -225,36 +264,13 @@ class SoundDetectionTaskHandler extends TaskHandler {
     _started = true;
 
     try {
-      await AudioMLService.instance.startListening(
-        onResult: (label, confidence) {
-          if (AudioMLService.isDetectionValid(label, confidence)) {
-            HapticService.instance.vibrateForSound(label);
-            FlutterForegroundTask.sendDataToMain({
-              'soundClass': label,
-              'confidence': confidence,
-            });
-            FlutterForegroundTask.updateService(
-              notificationTitle: '🔊 $label Detected!',
-              notificationText:
-                  '${(confidence * 100).toStringAsFixed(0)}% confidence',
-            );
-            Future.delayed(
-              const Duration(seconds: 5),
-              () => FlutterForegroundTask.updateService(
-                notificationTitle: 'SoundClass Active',
-                notificationText: 'Monitoring your environment...',
-              ),
-            );
-          }
-        },
-      );
+      await AudioMLService.instance.startListening(onResult: _handleDetection);
       print('TaskHandler: audio started OK');
     } catch (e) {
       print('TaskHandler error: $e');
     }
   }
 
-  @override
   @override
   void onRepeatEvent(DateTime timestamp) {
     print(
@@ -264,18 +280,7 @@ class SoundDetectionTaskHandler extends TaskHandler {
 
     if (!AudioMLService.instance.isListening) {
       print('TaskHandler: restarting audio...');
-      AudioMLService.instance.startListening(
-        onResult: (label, confidence) {
-          if (!AudioMLService.isDetectionValid(label, confidence)) return;
-
-          HapticService.instance.vibrateForSound(label);
-
-          FlutterForegroundTask.sendDataToMain({
-            'soundClass': label,
-            'confidence': confidence,
-          });
-        },
-      );
+      AudioMLService.instance.startListening(onResult: _handleDetection);
     }
   }
 
