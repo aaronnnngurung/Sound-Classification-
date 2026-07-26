@@ -18,10 +18,15 @@ class AudioMLService {
   bool get isListening => _isListening;
 
   // MUST match ALL_CLASSES order from the training notebook exactly —
-  // this is the order labels.txt was exported in. The new model outputs
-  // 6 classes (emergency-only, INCLUDE_NEGATIVE_CLASSES=False). If/when
-  // negative classes get reintroduced in training, this list AND the
-  // model asset below both need to be updated together.
+  // this is the order labels.txt was exported in (Section 14). The
+  // notebook now trains with INCLUDE_NEGATIVE_CLASSES=True, so the model
+  // outputs 7 classes: the 6 emergency classes plus a single collapsed
+  // "background" class (every ESC-50 negative category — keyboard_typing,
+  // footsteps, clock_tick, mouse_click, rain, wind, breathing,
+  // chirping_birds, washing_machine, laughing — is mapped to this one
+  // index during training via LABEL_MAP). If the notebook's
+  // INCLUDE_NEGATIVE_CLASSES flag or ALL_CLASSES list changes, this list
+  // AND the model asset below both need to be updated together.
   final List<String> _labels = [
     'siren',
     'crying_baby',
@@ -29,8 +34,15 @@ class AudioMLService {
     'glass_breaking',
     'fireworks',
     'car_horn',
+    'background',
   ];
 
+  // "background" is the catch-all negative class (index 6) — it is
+  // intentionally NOT in this set, so isDetectionValid() returns false
+  // for it and onResult() is never invoked. Callers (foreground service /
+  // notification / overlay code) only ever receive genuine emergency
+  // detections and don't need to separately branch on the label to
+  // decide whether to alert.
   static bool isDetectionValid(String label, double confidence) {
     const emergencyClasses = {
       'siren',
@@ -41,11 +53,12 @@ class AudioMLService {
       'car_horn',
     };
 
-    // Ignore non-emergency background classes completely. With the
-    // current 6-class emergency-only model every output IS an emergency
-    // class, so this is a no-op today — but it's left in place so this
-    // still behaves correctly if/when negative classes get added back
-    // to the model without anyone remembering to touch this file.
+    // Ignore "background" and any other non-emergency class completely.
+    // This used to be a no-op back when the model was emergency-only
+    // (6 classes); now that the model is trained with
+    // INCLUDE_NEGATIVE_CLASSES=True (7 classes, background included),
+    // this check is load-bearing — it's what keeps background noise
+    // from ever reaching onResult()/notifications/overlays.
     if (!emergencyClasses.contains(label)) return false;
 
     // Short transient sounds dilute across a 5-second buffer, so they
@@ -84,6 +97,17 @@ class AudioMLService {
   final List<double> _audioBuffer = [];
   late final List<Float64List> _melFilterBank;
 
+  // Counts clips processed since the mic stream was last (re)opened.
+  // The very first clip after a stream opens (fresh start OR a
+  // heartbeat-triggered restart) is disproportionately likely to
+  // contain a startup transient — mic gain/ADC settling, an OS record
+  // tone, a UI tap caught in the same window — that isn't representative
+  // of real ambient sound and isn't in the training distribution. We
+  // still run it through the model (so debugging/RMS logs stay
+  // continuous) but suppress acting on that one result. Reset to 0 every
+  // time startListening() actually (re)opens the stream.
+  int _clipsSinceStreamStart = 0;
+
   Future<void> _loadModel() async {
     if (_interpreter != null) return;
 
@@ -92,7 +116,8 @@ class AudioMLService {
       // NOTE: point this at whatever you name the new .tflite export
       // (the notebook currently writes "emergency_audio_classifier.tflite").
       // Make sure the file is added under assets/models/ AND declared
-      // in pubspec.yaml before running.
+      // in pubspec.yaml before running. It must be the 7-class
+      // (emergency + background) export, matching _labels above.
       _interpreter = await Interpreter.fromAsset(
         'assets/models/emergency_audio_classifier.tflite',
       );
@@ -109,16 +134,48 @@ class AudioMLService {
     }
   }
 
-  Future<void> startListening({
+  // Returns whether recording actually started. Every early exit is
+  // logged — previously several of these were silent `return;`s, so the
+  // caller (TaskHandler.onStart) had no way to tell "recording is
+  // running" apart from "startListening() bailed out for some reason,"
+  // and printed "audio started OK" either way. That masked real
+  // failures completely; use the return value to log truthfully instead
+  // of assuming success.
+  Future<bool> startListening({
     required Function(String classLabel, double confidence) onResult,
   }) async {
-    if (_isListening) return;
+    if (_isListening) {
+      print('AudioMLService: startListening() called but already listening — no-op.');
+      return true;
+    }
 
     await _loadModel();
-    if (_interpreter == null) return;
+    if (_interpreter == null) {
+      print('AudioMLService: startListening() aborted — interpreter failed to load.');
+      return false;
+    }
 
-    final hasPerm = await _audioRecorder.hasPermission();
-    if (!hasPerm) return;
+    // NOTE: this runs inside the flutter_foreground_task background
+    // isolate, which has no attached Android Activity. Permission checks
+    // that expect an Activity (as record's hasPermission() does on
+    // Android) can throw, hang, or silently return false in that
+    // context — even though the mic permission was already requested
+    // and granted from the MAIN isolate before the service was ever
+    // started (see DetectionDashboard._checkPermissionsThenStart). So
+    // this check is advisory/logging-only here, not a gate: we don't
+    // trust it enough to block on it. If the permission genuinely isn't
+    // granted, the real native startStream() call below will throw a
+    // proper PlatformException, which IS handled and logged.
+    try {
+      final hasPerm = await _audioRecorder.hasPermission();
+      print('AudioMLService: hasPermission() (isolate-side check) = $hasPerm');
+    } catch (e) {
+      print(
+        'AudioMLService: hasPermission() threw in this isolate ($e) — '
+        'expected due to no attached Activity here; proceeding since '
+        'permission was already verified before the service started.',
+      );
+    }
 
     _isListening = true;
     _audioBuffer.clear();
@@ -132,6 +189,8 @@ class AudioMLService {
         ),
       );
 
+      _clipsSinceStreamStart = 0;
+
       _audioStreamSubscription = audioStream.listen((Uint8List chunk) {
         if (!_isListening) return;
 
@@ -141,9 +200,13 @@ class AudioMLService {
           _runInference(onResult);
         }
       });
+
+      print('AudioMLService: recording stream started successfully.');
+      return true;
     } catch (e) {
       print('AudioMLService: Stream error: $e');
-      stopListening();
+      await stopListening();
+      return false;
     }
   }
 
@@ -203,6 +266,7 @@ class AudioMLService {
         ),
       );
 
+      // Output size MUST equal _labels.length (7: 6 emergency + background).
       var outputTensor = List.generate(
         1,
         (_) => List<double>.filled(_labels.length, 0.0),
@@ -212,23 +276,71 @@ class AudioMLService {
 
       List<double> probabilities = outputTensor.first;
 
-      double highestConfidence = -1.0;
-      int bestMatchIndex = -1;
+      // Debug-only: log the raw global argmax (whatever the softmax
+      // actually ranked highest, including "background") so you can see
+      // in the logs when background is out-competing a real event —
+      // useful for tuning, has no effect on the detection logic below.
+      int rawTopIndex = 0;
+      double rawTopConfidence = probabilities[0];
+      for (int i = 1; i < probabilities.length; i++) {
+        if (probabilities[i] > rawTopConfidence) {
+          rawTopConfidence = probabilities[i];
+          rawTopIndex = i;
+        }
+      }
+      print(
+        'AudioMLService: raw top = ${_labels[rawTopIndex]} '
+        '(${(rawTopConfidence * 100).toStringAsFixed(1)}%)',
+      );
 
-      for (int i = 0; i < probabilities.length; i++) {
-        if (probabilities[i] > highestConfidence) {
-          highestConfidence = probabilities[i];
-          bestMatchIndex = i;
+      // Do NOT pick a single global winner across all 7 classes and then
+      // validate just that one. Now that "background" competes in the
+      // same softmax as the 6 emergency classes (INCLUDE_NEGATIVE_CLASSES
+      // = True in the notebook), background can easily out-score a real
+      // emergency event — it's really 10 different ESC-50 negative
+      // categories all voting for one bucket, so its probability mass
+      // tends to run high even when a genuine emergency sound is also
+      // clearly present (e.g. fireworks at 0.70 while background sits at
+      // 0.80). Under the old "global argmax, then validate" approach,
+      // background winning that race meant the real fireworks signal was
+      // discarded outright — its own confidence was never even checked.
+      //
+      // Instead: check every emergency class's own probability against
+      // its own threshold, independently of what "won" the softmax, and
+      // keep the highest of whichever ones clear their bar. Detection
+      // now depends only on how confident the model is about THAT
+      // emergency class, not on whether it happened to beat background.
+      String? detectedLabel;
+      double detectedConfidence = -1.0;
+
+      for (int i = 0; i < _labels.length; i++) {
+        final label = _labels[i];
+        final confidence = probabilities[i];
+
+        if (isDetectionValid(label, confidence) &&
+            confidence > detectedConfidence) {
+          detectedLabel = label;
+          detectedConfidence = confidence;
         }
       }
 
-      if (bestMatchIndex != -1 && bestMatchIndex < _labels.length) {
-        String detectedLabel = _labels[bestMatchIndex];
-        print(
-          'AudioMLService: Predicted $detectedLabel (${(highestConfidence * 100).toStringAsFixed(1)}%)',
-        );
-        if (isDetectionValid(detectedLabel, highestConfidence)) {
-          onResult(detectedLabel, highestConfidence);
+      final isWarmupClip = _clipsSinceStreamStart == 0;
+      _clipsSinceStreamStart++;
+
+      if (detectedLabel != null) {
+        if (isWarmupClip) {
+          print(
+            'AudioMLService: Detected $detectedLabel '
+            '(${(detectedConfidence * 100).toStringAsFixed(1)}%) on the '
+            'first clip after stream start — suppressing as a likely '
+            'startup transient, not acting on it.',
+          );
+        } else {
+          print(
+            'AudioMLService: Detected $detectedLabel '
+            '(${(detectedConfidence * 100).toStringAsFixed(1)}%)',
+          );
+          onResult(detectedLabel, detectedConfidence);
         }
       }
     } catch (e) {

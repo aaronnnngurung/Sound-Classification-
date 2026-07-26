@@ -105,15 +105,24 @@ class _DetectionDashboardState extends State<DetectionDashboard>
   }
 
   void _onReceiveTaskData(Object data) {
+    print('Dashboard: _onReceiveTaskData raw = $data');
     if (data is Map<String, dynamic>) {
       final soundClass = data['soundClass'] as String?;
       final confidence = data['confidence'] as double?;
+      print(
+        'Dashboard: parsed soundClass=$soundClass confidence=$confidence '
+        'isAlertWindowOpen=$_isAlertWindowOpen mounted=$mounted',
+      );
       if (soundClass != null &&
           confidence != null &&
           !_isAlertWindowOpen &&
           mounted) {
         _onSoundDetected(soundClass, confidence);
+      } else {
+        print('Dashboard: _onReceiveTaskData dropped the detection — see flags above.');
       }
+    } else {
+      print('Dashboard: _onReceiveTaskData got non-map data, ignoring: ${data.runtimeType}');
     }
   }
 
@@ -266,6 +275,8 @@ class _DetectionDashboardState extends State<DetectionDashboard>
   // is open. Calling HapticService here too would double-vibrate on
   // every single detection — which was happening before this fix.
   void _onSoundDetected(String soundClass, double confidence) {
+    print('Dashboard: _onSoundDetected ENTERED — $soundClass @ $confidence');
+
     setState(() {
       _lastDetectedSound = soundClass;
       _lastConfidence = confidence;
@@ -273,7 +284,10 @@ class _DetectionDashboardState extends State<DetectionDashboard>
     });
 
     final config = _soundConfig[soundClass];
-    if (config == null) return;
+    if (config == null) {
+      print('Dashboard: no _soundConfig entry for "$soundClass" — aborting, no overlay/notification will fire.');
+      return;
+    }
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
@@ -296,18 +310,40 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       }
     });
 
-    // PB-04 — Visual alert (foreground)
-    // Full screen overlay when app is open
-    if (!_isAlertWindowOpen) {
-      _showAlertOverlay(soundClass, confidence);
-    }
-    if(WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed){
-    AlertNotificationService.instance.showAlertNotification(
-      soundClass: soundClass,
-      soundLabel: config['label'] as String,
-      confidence: confidence,
+    // PB-04 — App-open vs. app-backgrounded alert routing.
+    // These two branches are mutually exclusive on purpose: the overlay
+    // is a full-screen UI element, so it only ever makes sense — and
+    // only ever fires — while the app is actually open/resumed in the
+    // foreground. The alert notification is the opposite: it only fires
+    // while the app is NOT in the foreground, since that's the only
+    // time a system notification is the right way to reach the user.
+    // Previously the overlay call wasn't gated on lifecycle state at
+    // all, so a detection while backgrounded could still queue up a
+    // showDialog() call that surfaces unexpectedly whenever the app is
+    // next reopened, alongside the notification for the same event.
+    final isAppOpen =
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    print(
+      'Dashboard: routing decision — lifecycleState='
+      '${WidgetsBinding.instance.lifecycleState}, isAppOpen=$isAppOpen, '
+      'isAlertWindowOpen=$_isAlertWindowOpen',
     );
-  }
+
+    if (isAppOpen) {
+      if (!_isAlertWindowOpen) {
+        print('Dashboard: showing overlay for $soundClass');
+        _showAlertOverlay(soundClass, confidence);
+      } else {
+        print('Dashboard: overlay suppressed — one is already open.');
+      }
+    } else {
+      print('Dashboard: showing alert notification for $soundClass');
+      AlertNotificationService.instance.showAlertNotification(
+        soundClass: soundClass,
+        soundLabel: config['label'] as String,
+        confidence: confidence,
+      );
+    }
   }
 
   void _showAlertOverlay(String soundClass, double confidence) {

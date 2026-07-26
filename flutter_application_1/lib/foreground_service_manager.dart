@@ -120,7 +120,7 @@ class ForegroundServiceManager {
       await WakelockPlus.enable();
       await _showFallbackNotification();
 
-      await AudioMLService.instance.startListening(
+      final started = await AudioMLService.instance.startListening(
         onResult: (label, confidence) {
           if (!AudioMLService.isDetectionValid(label, confidence)) return;
 
@@ -130,7 +130,14 @@ class ForegroundServiceManager {
         },
       );
 
-      print('Fallback mode started OK');
+      print('Fallback mode: audio started = $started');
+      if (!started) {
+        _usingFallback = false;
+        await WakelockPlus.disable();
+        await _cancelFallbackNotification();
+        return false;
+      }
+
       return true;
     } catch (e) {
       print('Fallback mode error: $e');
@@ -264,10 +271,28 @@ class SoundDetectionTaskHandler extends TaskHandler {
     _started = true;
 
     try {
-      await AudioMLService.instance.startListening(onResult: _handleDetection);
-      print('TaskHandler: audio started OK');
+      final started = await AudioMLService.instance.startListening(
+        onResult: _handleDetection,
+      );
+      // Reflect what actually happened — previously this printed
+      // "audio started OK" unconditionally, even when startListening()
+      // had silently bailed out (e.g. the isolate-side permission
+      // re-check failing) and no recording was actually happening.
+      if (started) {
+        print('TaskHandler: audio started OK');
+      } else {
+        print(
+          'TaskHandler: audio FAILED to start — will retry on next '
+          'heartbeat (see onRepeatEvent)',
+        );
+        // Let the next heartbeat's restart-if-not-listening check pick
+        // this back up instead of leaving _started stuck at true with
+        // no recording running.
+        _started = false;
+      }
     } catch (e) {
       print('TaskHandler error: $e');
+      _started = false;
     }
   }
 
@@ -280,7 +305,11 @@ class SoundDetectionTaskHandler extends TaskHandler {
 
     if (!AudioMLService.instance.isListening) {
       print('TaskHandler: restarting audio...');
-      AudioMLService.instance.startListening(onResult: _handleDetection);
+      AudioMLService.instance
+          .startListening(onResult: _handleDetection)
+          .then((started) {
+        print('TaskHandler: restart result = $started');
+      });
     }
   }
 
