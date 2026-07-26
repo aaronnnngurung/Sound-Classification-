@@ -7,6 +7,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'audio_ml_service.dart';
 import 'haptic_service.dart';
+import 'flash_service.dart';
 
 @pragma('vm:entry-point')
 void startCallback() {
@@ -125,6 +126,7 @@ class ForegroundServiceManager {
           if (!AudioMLService.isDetectionValid(label, confidence)) return;
 
           HapticService.instance.vibrateForSound(label);
+          FlashService.instance.blinkForSound(label);
           onSoundDetected?.call(label, confidence);
           _updateFallbackNotification(label, confidence);
         },
@@ -245,6 +247,7 @@ class SoundDetectionTaskHandler extends TaskHandler {
     if (!AudioMLService.isDetectionValid(label, confidence)) return;
 
     HapticService.instance.vibrateForSound(label);
+    FlashService.instance.blinkForSound(label);
 
     FlutterForegroundTask.sendDataToMain({
       'soundClass': label,

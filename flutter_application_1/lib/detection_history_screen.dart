@@ -33,9 +33,6 @@ class _DetectionHistoryScreenState extends State<DetectionHistoryScreen> {
     'fire_alarm',
     'glass_breaking',
     'door_wood_knock',
-    'clock_alarm',
-    'train',
-    'fireworks',
   ];
 
   final Map<String, Map<String, dynamic>> _soundConfig = {
@@ -68,21 +65,6 @@ class _DetectionHistoryScreenState extends State<DetectionHistoryScreen> {
       'label': 'Knocking',
       'icon': Icons.door_front_door_rounded,
       'color': Colors.brown[600],
-    },
-    'clock_alarm': {
-      'label': 'Clock Alarm',
-      'icon': Icons.alarm_rounded,
-      'color': Colors.blue[700],
-    },
-    'train': {
-      'label': 'Train',
-      'icon': Icons.train_rounded,
-      'color': Colors.teal[600],
-    },
-    'fireworks': {
-      'label': 'Fireworks',
-      'icon': Icons.celebration_rounded,
-      'color': Colors.pink[600],
     },
   };
 

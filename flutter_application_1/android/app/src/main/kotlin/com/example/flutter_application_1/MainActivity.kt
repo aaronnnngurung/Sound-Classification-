@@ -11,8 +11,12 @@ import androidx.core.app.NotificationCompat
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
+import android.hardware.camera2.CameraManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -97,13 +101,20 @@ class MainActivity : FlutterActivity() {
     result.success(null)
 }
 
-"cancelPersistentNotification" -> {
+                "cancelPersistentNotification" -> {
     val nm = getSystemService(
         Context.NOTIFICATION_SERVICE
     ) as NotificationManager
     nm.cancel(888)
     result.success(null)
 }
+
+                "flashBlink" -> {
+                    val soundClass =
+                        call.argument<String>("soundClass") ?: ""
+                    flashBlink(soundClass)
+                    result.success(null)
+                }
 
                 else -> result.notImplemented()
             }
@@ -256,5 +267,55 @@ class MainActivity : FlutterActivity() {
             .build()
 
         notificationManager.notify(999, notification)
+    }
+
+    private fun flashBlink(soundClass: String) {
+        try {
+            val cameraManager = getSystemService(
+                Context.CAMERA_SERVICE
+            ) as CameraManager
+            val cameraId = cameraManager.cameraIdList.firstOrNull()
+                ?: return
+
+            val blinkCount = when (soundClass) {
+                "siren" -> 6
+                "crying_baby" -> 4
+                "car_horn" -> 3
+                "glass_breaking" -> 8
+                "door_wood_knock" -> 4
+                "clock_alarm" -> 8
+                "train" -> 2
+                "fireworks" -> 5
+                else -> 3
+            }
+
+            val blinkIntervalMs = when (soundClass) {
+                "siren" -> 300L
+                "crying_baby" -> 400L
+                "car_horn" -> 250L
+                "glass_breaking" -> 120L
+                "door_wood_knock" -> 250L
+                "clock_alarm" -> 200L
+                "train" -> 800L
+                "fireworks" -> 180L
+                else -> 250L
+            }
+
+            val handler = Handler(Looper.getMainLooper())
+            var isOn = false
+
+            for (i in 0 until blinkCount * 2) {
+                handler.postDelayed({
+                    try {
+                        cameraManager.setTorchMode(cameraId, !isOn)
+                        isOn = !isOn
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }, i * blinkIntervalMs)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }

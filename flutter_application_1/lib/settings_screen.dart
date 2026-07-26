@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -14,6 +15,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // PB-011 — Power save mode toggle
   bool _powerSaveMode = false;
+
+  // Camera flash alert toggle
+  bool _cameraFlashAlert = false;
 
   // PB-012 — Mic conflict notification toggle
   bool _micConflictAlert = true;
@@ -33,6 +37,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadSettings() async {
     if (_user == null) return;
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedFlash = prefs.getBool('cameraFlashAlert');
+      if (savedFlash != null && mounted) {
+        setState(() => _cameraFlashAlert = savedFlash);
+      }
+
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(_user!.uid)
@@ -46,6 +56,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _powerSaveMode = data['powerSaveMode'] ?? false;
           _micConflictAlert = data['micConflictAlert'] ?? true;
           _sensitivity = (data['sensitivity'] ?? 0.85).toDouble();
+          if (savedFlash == null) {
+            _cameraFlashAlert = data['cameraFlashAlert'] ?? false;
+          }
         });
       }
     } catch (e) {
@@ -67,9 +80,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           .set({
             'powerSaveMode': _powerSaveMode,
             'micConflictAlert': _micConflictAlert,
+            'cameraFlashAlert': _cameraFlashAlert,
             'sensitivity': _sensitivity,
             'updatedAt': DateTime.now().toIso8601String(),
           }, SetOptions(merge: true));
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('cameraFlashAlert', _cameraFlashAlert);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -314,6 +331,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ],
+              ),
+
+              const Divider(height: 24),
+
+              // Camera flash alerts
+              _buildToggleTile(
+                icon: Icons.flash_on,
+                iconColor: Colors.purple[600]!,
+                title: 'Camera Flash Alerts',
+                subtitle: 'Blink camera flashlight on urgent sound triggers.',
+                value: _cameraFlashAlert,
+                onChanged: (val) => setState(() => _cameraFlashAlert = val),
               ),
 
               const Divider(height: 24),

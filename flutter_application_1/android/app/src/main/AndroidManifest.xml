@@ -4,6 +4,10 @@
     <!-- Microphone — for sound detection (PB-01) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
+    <!-- Camera — for flash alerts on sound detection -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false"/>
+
     <!-- Notifications — for sound alerts (PB-04) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 

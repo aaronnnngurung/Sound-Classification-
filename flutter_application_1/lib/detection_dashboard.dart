@@ -8,6 +8,7 @@ import 'database_helper.dart';
 import 'background_permission_helper.dart';
 import 'haptic_service.dart';
 import 'alert_notification_service.dart';
+import 'flash_service.dart';
 
 class DetectionDashboard extends StatefulWidget {
   const DetectionDashboard({Key? key}) : super(key: key);
@@ -59,12 +60,6 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       'icon': Icons.door_front_door_rounded,
       'color': Colors.brown[600],
       'description': 'Knocking sound detected',
-    },
-    'fireworks': {
-      'label': 'Fireworks',
-      'icon': Icons.celebration_rounded,
-      'color': Colors.pink[600],
-      'description': 'Fireworks detected',
     },
   };
 

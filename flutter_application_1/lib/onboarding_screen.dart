@@ -296,21 +296,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         'label': 'Knocking',
         'color': Colors.brown[600]!,
       },
-      {
-        'icon': Icons.alarm_rounded,
-        'label': 'Clock Alarm',
-        'color': Colors.blue[700]!,
-      },
-      {
-        'icon': Icons.train_rounded,
-        'label': 'Train',
-        'color': Colors.teal[600]!,
-      },
-      {
-        'icon': Icons.celebration_rounded,
-        'label': 'Fireworks',
-        'color': Colors.pink[600]!,
-      },
     ];
 
     return Container(
