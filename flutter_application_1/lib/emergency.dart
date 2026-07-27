@@ -37,6 +37,21 @@ class EmergencyModeService {
   /// a Firestore-synced value on first load).
   static Future<bool?> getStoredValue() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Force a fresh read from native storage. SharedPreferences caches
+    // its snapshot in memory per-isolate after the first read within
+    // that isolate — and this method gets called from BOTH the main UI
+    // isolate (Settings screen) AND the long-running background
+    // foreground-service isolate (SoundDetectionTaskHandler). Without
+    // this, the background isolate keeps serving whatever value was
+    // cached when it last read this key (often from before the service
+    // even started), so toggling Emergency Mode while detection is
+    // already running would silently have no effect until the service
+    // restarts. reload() re-fetches from the native side every time,
+    // so the isolate that started first still sees a change made later
+    // by the other isolate.
+    await prefs.reload();
+
     return prefs.getBool(_prefsKey);
   }
 

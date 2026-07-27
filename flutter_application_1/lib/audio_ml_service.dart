@@ -61,25 +61,17 @@ class AudioMLService {
     // from ever reaching onResult()/notifications/overlays.
     if (!emergencyClasses.contains(label)) return false;
 
-    // Short transient sounds dilute across a 5-second buffer, so they
-    // legitimately need a lower bar or real hits get missed.
-    const looseTransientClasses = {'glass_breaking', 'door_wood_knock'};
-
-    // Fireworks gets its OWN, stricter bucket. Real-mic testing showed
-    // it acting as a leak destination — misclassified door_wood_knock
-    // clips (both short, percussive, transient sounds) were landing
-    // here at high confidence. Rather than lumping it in with the other
-    // transients at a lenient threshold (which would make that leak
-    // worse), it requires much higher confidence before we act on it.
-    const strictTransientClasses = {'fireworks'};
-
-    if (strictTransientClasses.contains(label)) {
-      return confidence >= 0.80;
-    }
-    if (looseTransientClasses.contains(label)) {
-      return confidence >= 0.45;
-    }
-    return confidence >= 0.65;
+    // Single uniform threshold across every emergency class — 0.60/0.65
+    // was letting too much through. NOTE: door_wood_knock and
+    // glass_breaking are short, percussive sounds that dilute across
+    // the 5-second buffer, so their raw confidence tends to run lower
+    // than sustained sounds like siren even on a genuine hit — that's
+    // why they previously sat in their own lower-threshold bucket
+    // (0.45). Raising them to 0.80 too means real knocks/glass-breaks
+    // will need to be considerably louder/clearer to register; if you
+    // find those two specifically under-detecting real events, that's
+    // the first place to dial back down.
+    return confidence >= 0.80;
   }
 
   // Audio parameters — MUST match the training notebook's Section 2
