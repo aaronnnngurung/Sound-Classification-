@@ -9,6 +9,8 @@ import 'audio_ml_service.dart';
 import 'haptic_service.dart';
 import 'flash_service.dart';
 import 'emergency.dart';
+import 'package:flutter_application_1/smartwatch/watch_sync_service.dart';
+
 
 @pragma('vm:entry-point')
 void startCallback() {
@@ -264,6 +266,14 @@ class SoundDetectionTaskHandler extends TaskHandler {
     // suppressed end-to-end — no flash, no overlay, no notification —
     // not just a silenced notification.
     if (!await EmergencyModeService.shouldAlert(label)) return;
+
+    WatchSyncService.instance.sendEmergencyAlert(
+      EmergencyAlert(
+        soundClass: label,
+        confidence: confidence,
+        timestamp: DateTime.now(),
+      ),
+    );
 
     // Always blink
     FlashService.instance.blinkForSound(label);

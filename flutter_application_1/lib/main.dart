@@ -16,6 +16,7 @@ import 'package:flutter_application_1/onboarding_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/foreground_service_manager.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter_application_1/smartwatch/watch_sync_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +26,16 @@ void main() async {
 
   // Initialize foreground service settings
   ForegroundServiceManager.initialize();
+
+  // Advertise this app as a watch-connectable capability, so the Wear
+  // OS companion app can detect "the SoundClass phone app is actually
+  // running" (see watch_sync_service.dart). NOT awaited on purpose —
+  // watch pairing isn't on the critical path to showing the UI, and a
+  // slow or unavailable Wearable API on this device (no Play Services,
+  // no paired watch, etc.) shouldn't delay app startup. Every failure
+  // path inside initializePhoneSide() is already caught internally, so
+  // this can't throw here even unawaited.
+  WatchSyncService.instance.initializePhoneSide();
 
   await GoogleSignIn.instance.initialize(
     serverClientId:

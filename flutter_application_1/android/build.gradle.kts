@@ -25,6 +25,10 @@ subprojects {
                 sourceCompatibility = JavaVersion.VERSION_17
                 targetCompatibility = JavaVersion.VERSION_17
             }
+
+            if (namespace ==null){
+                namespace = project.group.toString()
+            }
         }
 
         tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {

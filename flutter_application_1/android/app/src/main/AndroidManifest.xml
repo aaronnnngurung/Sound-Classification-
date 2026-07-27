@@ -21,6 +21,23 @@
     <!-- Vibration — for haptic alerts (PB-03) -->
     <uses-permission android:name="android.permission.VIBRATE"/>
 
+    <!--
+    NOTE (PB-05, smartwatch sync): no extra permissions needed here.
+    The Wear OS Data Layer API (flutter_wear_os_connectivity) abstracts
+    the transport away — Bluetooth/WiFi/relay is all handled internally
+    by Google Play Services under ITS OWN permissions, not yours. Your
+    app never touches raw Bluetooth, so there's nothing to declare.
+
+    The two lines that WERE here (uses-feature type.watch, and the
+    com.google.android.wearable.standalone meta-data below) have been
+    removed — those declare "this app IS a Wear OS app" and belong only
+    in the watch build flavor's manifest (android/app/src/wear/
+    AndroidManifest.xml), never in the phone app's manifest. Leaving
+    uses-feature type.watch here (with its default required="true")
+    risked telling the Play Store your PHONE app requires Wear OS
+    hardware to even install.
+    -->
+
     <!-- Storage — for CSV download (Android 9 and below only) -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"

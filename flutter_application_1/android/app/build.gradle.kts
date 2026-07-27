@@ -13,6 +13,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -26,6 +27,34 @@ android {
         versionName = flutter.versionName
 
         multiDexEnabled = true
+    }
+
+    // ── Phone / Watch flavors ────────────────────────────────────
+    // Lets one repo build two APKs: the phone app (lib/main.dart) and
+    // the Wear OS companion app (lib/main_watch.dart).
+    //
+    // IMPORTANT: neither flavor sets applicationIdSuffix. The Wear OS
+    // Data Layer API requires the phone app and watch app to share the
+    // EXACT SAME applicationId to find each other at all — adding a
+    // suffix to either flavor silently breaks phone<->watch
+    // communication (no error, they just never see each other).
+    flavorDimensions += "target"
+    productFlavors {
+        create("mobile") {
+            dimension = "target"
+            // Uses src/main/AndroidManifest.xml as-is.
+        }
+        create("wear") {
+            dimension = "target"
+            // Gradle merges src/wear/AndroidManifest.xml ON TOP of
+            // src/main/AndroidManifest.xml for this flavor only.
+        }
+    }
+
+    sourceSets {
+        getByName("wear") {
+            manifest.srcFile("src/wear/AndroidManifest.xml")
+        }
     }
 
     buildTypes {
@@ -53,8 +82,10 @@ dependencies {
 
     // Add Firebase dependencies (NO versions needed when using BoM)
     implementation("com.google.firebase:firebase-analytics")
-    
+
     // Add other Firebase products here as needed, e.g.:
     // implementation("com.google.firebase:firebase-auth")
     // implementation("com.google.firebase:firebase-firestore")
+    
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
