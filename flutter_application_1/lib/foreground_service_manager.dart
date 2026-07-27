@@ -8,6 +8,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'audio_ml_service.dart';
 import 'haptic_service.dart';
 import 'flash_service.dart';
+import 'emergency.dart';
 
 @pragma('vm:entry-point')
 void startCallback() {
@@ -121,8 +122,15 @@ class ForegroundServiceManager {
       await _showFallbackNotification();
 
       final started = await AudioMLService.instance.startListening(
-        onResult: (label, confidence) {
+        onResult: (label, confidence) async {
           if (!AudioMLService.isDetectionValid(label, confidence)) return;
+
+          // FR-11 — Emergency Mode: suppress everything except
+          // safety-critical classes (siren) while it's on. This is the
+          // very first check after validity on purpose, so a suppressed
+          // sound triggers NO haptic, NO flash, NO dashboard callback,
+          // and NO notification — not a partial suppression.
+          if (!await EmergencyModeService.shouldAlert(label)) return;
 
           HapticService.instance.vibrateForSound(label);
           FlashService.instance.blinkForSound(label);
@@ -247,8 +255,15 @@ class SoundDetectionTaskHandler extends TaskHandler {
   // restart, so a mid-session restart behaves identically to a normal
   // start (same haptic + notification-title behavior) instead of two
   // handlers slowly drifting apart.
-  void _handleDetection(String label, double confidence) {
+  void _handleDetection(String label, double confidence) async {
     if (!AudioMLService.isDetectionValid(label, confidence)) return;
+
+    // FR-11 — Emergency Mode: suppress everything except safety-critical
+    // classes (siren) while it's on. Checked here, before anything else
+    // (flash, dashboard send, notification), so a suppressed sound is
+    // suppressed end-to-end — no flash, no overlay, no notification —
+    // not just a silenced notification.
+    if (!await EmergencyModeService.shouldAlert(label)) return;
 
     // Always blink
     FlashService.instance.blinkForSound(label);

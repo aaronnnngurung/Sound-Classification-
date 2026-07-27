@@ -15,6 +15,10 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 
+    pluginManager.withPlugin("com.android.library") {
+        plugins.apply("org.jetbrains.kotlin.android")
+    }
+
     afterEvaluate {
         extensions.findByType(com.android.build.gradle.BaseExtension::class.java)?.apply {
             compileOptions {

@@ -284,10 +284,10 @@ packages:
     dependency: transitive
     description:
       name: google_sign_in_android
-      sha256: "5b89f1d3c095cc53dfa4f23fbfa88da06dff3fdeb1c86656f30cf8b4ca0e7af8"
+      sha256: a01d4fd5a0e4eb0c1961434a0289a436abf9225b0933963c8e4e5ed88c26e40b
       url: "https://pub.dev"
     source: hosted
-    version: "7.2.13"
+    version: "7.2.15"
   google_sign_in_ios:
     dependency: transitive
     description:
@@ -348,10 +348,10 @@ packages:
     dependency: transitive
     description:
       name: jni
-      sha256: c2230682d5bc2362c1c9e8d3c7f406d9cbba23ab3f2e203a025dd47e0fb2e68f
+      sha256: ca1efa31ef27a0b8ecbb4f8dcf3785e5ad1b8a54c64af9b72d287ae81f93a4f4
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.0"
+    version: "1.0.1"
   jni_flutter:
     dependency: transitive
     description:
@@ -360,6 +360,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.1"
+  jni_util:
+    dependency: transitive
+    description:
+      name: jni_util
+      sha256: "1ba86da04a5f2bf18fde2edb235587e70c5b0fc5bd4ba955f46b00942c3fc35f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   json_annotation:
     dependency: transitive
     description:
@@ -428,26 +436,26 @@ packages:
     dependency: transitive
     description:
       name: objective_c
-      sha256: "6cb691c686fa2838c6deb34980d426145c2a5d537491cb83d463c33cdbc726ed"
+      sha256: b7fb95a6d9a4f009edd63dc5ac69f07420b23a16161c6dd8660290b59c602e8e
       url: "https://pub.dev"
     source: hosted
-    version: "9.4.1"
+    version: "9.5.0"
   package_config:
     dependency: transitive
     description:
       name: package_config
-      sha256: f096c55ebb7deb7e384101542bfba8c52696c1b56fca2eb62827989ef2353bbc
+      sha256: ffcf4cf3d6c0b74ac43708d9f56625506e8a68aa935abe9d267a7330f320eb5d
       url: "https://pub.dev"
     source: hosted
-    version: "2.2.0"
+    version: "3.0.0"
   package_info_plus:
     dependency: transitive
     description:
       name: package_info_plus
-      sha256: f5c435dc0e0d461e5b32471a870f769b6a1cc46930637efe24fbc535314e78ad
+      sha256: "127e1751e37ffb2ff4658beeaca77bad0c27bf5f932bd3a501c2296926d4b481"
       url: "https://pub.dev"
     source: hosted
-    version: "10.2.0"
+    version: "10.2.1"
   package_info_plus_platform_interface:
     dependency: transitive
     description:
@@ -692,10 +700,10 @@ packages:
     dependency: transitive
     description:
       name: shared_preferences_android
-      sha256: "93ae5884a9df5d3bb696825bceb3a17590754548b5d740eba51500afc8d088f5"
+      sha256: "0634e64bd719f89c012f392938e173521f535d3ecaf66558fa94a056d22b5cc7"
       url: "https://pub.dev"
     source: hosted
-    version: "2.4.26"
+    version: "2.4.27"
   shared_preferences_foundation:
     dependency: transitive
     description:
@@ -817,10 +825,10 @@ packages:
     dependency: transitive
     description:
       name: synchronized
-      sha256: "93b153dcb6a26dcddee6ca087dd634b53e38c10b5aa163e8e49501a776456153"
+      sha256: "61894a1956de6b4fc1aefd0892e109514a1a706cbece3ac59decd90ff5a7a423"
       url: "https://pub.dev"
     source: hosted
-    version: "3.4.1"
+    version: "3.4.1+1"
   term_glyph:
     dependency: transitive
     description:
@@ -873,18 +881,18 @@ packages:
     dependency: "direct main"
     description:
       name: wakelock_plus
-      sha256: "824c5bba0f800e86d32e57d3d1843c531f090005cc89d9a837933e6601093d53"
+      sha256: "7253bca0fcf40d8413ddfcf4d2a1fa0a82475e79be25a4f2c564b695c9351486"
       url: "https://pub.dev"
     source: hosted
-    version: "1.6.1"
+    version: "1.7.0"
   wakelock_plus_platform_interface:
     dependency: transitive
     description:
       name: wakelock_plus_platform_interface
-      sha256: b13f99e992e7ae6a152e16c5559d3c07ff445b13330192662494e614ca3e7d7b
+      sha256: "0618d1799f0b28bcf98255b4ee8313e6fc4d38589dc4ee5fe5840d57d1aff6da"
       url: "https://pub.dev"
     source: hosted
-    version: "1.5.1"
+    version: "1.6.0"
   web:
     dependency: transitive
     description:

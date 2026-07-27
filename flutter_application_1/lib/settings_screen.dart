@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'emergency.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -21,6 +22,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // PB-012 — Mic conflict notification toggle
   bool _micConflictAlert = true;
+
+  // FR-11 — Emergency Mode: restricts alerts to safety-critical sounds
+  // only (see EmergencyModeService.safetyCriticalClasses — siren, by
+  // current product decision), suppressing alerts for routine sounds.
+  // Source of truth lives in EmergencyModeService (SharedPreferences),
+  // NOT just this local field — the background foreground-service
+  // isolate reads it directly from there on every detection, since an
+  // in-memory bool here wouldn't be visible to that isolate at all.
+  bool _emergencyMode = false;
 
   // Sensitivity slider (maps to confidence threshold)
   double _sensitivity = 0.85;
@@ -43,6 +53,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         setState(() => _cameraFlashAlert = savedFlash);
       }
 
+      // Emergency Mode's local (per-device) value is authoritative,
+      // same pattern as cameraFlashAlert above — only fall back to
+      // whatever's in Firestore if this device has never set it.
+      final savedEmergencyMode = await EmergencyModeService.getStoredValue();
+      if (savedEmergencyMode != null && mounted) {
+        setState(() => _emergencyMode = savedEmergencyMode);
+      }
+
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(_user!.uid)
@@ -59,7 +77,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (savedFlash == null) {
             _cameraFlashAlert = data['cameraFlashAlert'] ?? false;
           }
+          if (savedEmergencyMode == null) {
+            _emergencyMode = data['emergencyMode'] ?? false;
+          }
         });
+
+        // This device had never set Emergency Mode locally, so we just
+        // pulled it from Firestore instead — write it back into
+        // SharedPreferences so the background isolate (which only ever
+        // reads local storage, never Firestore) actually sees it.
+        if (savedEmergencyMode == null) {
+          await EmergencyModeService.setEnabled(_emergencyMode);
+        }
       }
     } catch (e) {
       debugPrint('Error loading settings: $e');
@@ -81,6 +110,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'powerSaveMode': _powerSaveMode,
             'micConflictAlert': _micConflictAlert,
             'cameraFlashAlert': _cameraFlashAlert,
+            'emergencyMode': _emergencyMode,
             'sensitivity': _sensitivity,
             'updatedAt': DateTime.now().toIso8601String(),
           }, SetOptions(merge: true));
@@ -108,6 +138,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  // FR-11 — flips Emergency Mode immediately (not gated behind the
+  // "Save Settings" button) because it needs to take effect right away
+  // for the background detection isolate, which reads
+  // EmergencyModeService's SharedPreferences-backed value directly.
+  // Firestore sync for this field still happens on the normal Save flow.
+  Future<void> _onEmergencyModeChanged(bool val) async {
+    setState(() => _emergencyMode = val);
+    await EmergencyModeService.setEnabled(val);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            val
+                ? 'Emergency Mode on — only sirens will alert you now'
+                : 'Emergency Mode off — all emergency sounds will alert you',
+          ),
+          backgroundColor: val ? Colors.red[600] : Colors.grey[700],
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -256,6 +310,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Emergency Mode — placed first/prominently since it's a
+            // safety-critical system setting, and visually flagged (red
+            // accent) when active so it's obvious at a glance.
+            _buildSectionHeader('EMERGENCY MODE'),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: _emergencyMode ? Colors.red[50] : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _emergencyMode ? Colors.red[300]! : Colors.transparent,
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: _buildToggleTile(
+                icon: Icons.emergency_share_rounded,
+                iconColor: Colors.red[600]!,
+                title: 'Emergency Mode',
+                subtitle:
+                    'Only alert for safety-critical sounds (siren). '
+                    'Routine sounds like knocking, fireworks, glass '
+                    'breaking, a crying baby, or a car horn stay '
+                    'silent — no vibration, flash, or notification — '
+                    'while this is on.',
+                value: _emergencyMode,
+                onChanged: _onEmergencyModeChanged,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
             // Detection Settings
             _buildSectionHeader('DETECTION SETTINGS'),
             const SizedBox(height: 10),
@@ -513,6 +607,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required ValueChanged<bool> onChanged,
   }) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: 40,
