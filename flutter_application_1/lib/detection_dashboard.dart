@@ -100,24 +100,37 @@ class _DetectionDashboardState extends State<DetectionDashboard>
   }
 
   void _onReceiveTaskData(Object data) {
-    print('Dashboard: _onReceiveTaskData raw = $data');
-    if (data is Map<String, dynamic>) {
-      final soundClass = data['soundClass'] as String?;
-      final confidence = data['confidence'] as double?;
+    print('Dashboard: _onReceiveTaskData raw = $data (${data.runtimeType})');
+
+    // FIX: accept any Map, not just Map<String, dynamic>.
+    // Data crossing the isolate boundary from the background service
+    // arrives as Map<Object, Object>, which fails an `is Map<String, dynamic>`
+    // check even though the keys/values are perfectly readable at runtime.
+    if (data is! Map) {
       print(
-        'Dashboard: parsed soundClass=$soundClass confidence=$confidence '
-        'isAlertWindowOpen=$_isAlertWindowOpen mounted=$mounted',
+        'Dashboard: _onReceiveTaskData got non-map data, ignoring: ${data.runtimeType}',
       );
-      if (soundClass != null &&
-          confidence != null &&
-          !_isAlertWindowOpen &&
-          mounted) {
-        _onSoundDetected(soundClass, confidence);
-      } else {
-        print('Dashboard: _onReceiveTaskData dropped the detection — see flags above.');
-      }
+      return;
+    }
+
+    final soundClass = data['soundClass']?.toString();
+    final rawConfidence = data['confidence'];
+    final confidence = rawConfidence is num ? rawConfidence.toDouble() : null;
+
+    print(
+      'Dashboard: parsed soundClass=$soundClass confidence=$confidence '
+      'isAlertWindowOpen=$_isAlertWindowOpen mounted=$mounted',
+    );
+
+    if (soundClass != null &&
+        confidence != null &&
+        !_isAlertWindowOpen &&
+        mounted) {
+      _onSoundDetected(soundClass, confidence);
     } else {
-      print('Dashboard: _onReceiveTaskData got non-map data, ignoring: ${data.runtimeType}');
+      print(
+        'Dashboard: _onReceiveTaskData dropped the detection — see flags above.',
+      );
     }
   }
 
@@ -280,9 +293,12 @@ class _DetectionDashboardState extends State<DetectionDashboard>
 
     final config = _soundConfig[soundClass];
     if (config == null) {
-      print('Dashboard: no _soundConfig entry for "$soundClass" — aborting, no overlay/notification will fire.');
+      print(
+        'Dashboard: no _soundConfig entry for "$soundClass" — aborting, no overlay/notification will fire.',
+      );
       return;
     }
+    HapticService.instance.vibrateForSound(soundClass);
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
@@ -328,11 +344,19 @@ class _DetectionDashboardState extends State<DetectionDashboard>
       if (!_isAlertWindowOpen) {
         print('Dashboard: showing overlay for $soundClass');
         _showAlertOverlay(soundClass, confidence);
-      } else {
-        print('Dashboard: overlay suppressed — one is already open.');
       }
     } else {
-      print('Dashboard: showing alert notification for $soundClass');
+      // FIX: notification-related calls moved inside the "app not open" branch
+      ForegroundServiceManager.instance.updateNotification(
+        config['label'] as String,
+        confidence,
+      );
+      Future.delayed(const Duration(seconds: 5), () {
+        if (_isListening) {
+          ForegroundServiceManager.instance.resetNotification();
+        }
+      });
+
       AlertNotificationService.instance.showAlertNotification(
         soundClass: soundClass,
         soundLabel: config['label'] as String,
@@ -344,34 +368,34 @@ class _DetectionDashboardState extends State<DetectionDashboard>
   void _showAlertOverlay(String soundClass, double confidence) {
     final config = _soundConfig[soundClass];
     if (config == null) return;
-    //we do this to lock the screen from recieving new alrts imediately.
     setState(() {
       _isAlertWindowOpen = true;
     });
 
     showDialog(
       context: context,
-      barrierDismissible:
-          false, //this prevents closing by tapping outside the box
+      barrierDismissible: false,
       builder: (ctx) => AlertOverlay(
         soundLabel: config['label'] as String,
         description: config['description'] as String,
         icon: config['icon'] as IconData,
         color: config['color'] as Color,
         confidence: confidence,
-        onDismiss: () {
-          Navigator.pop(ctx); //remove the current overlay
-
-          Future.delayed(const Duration(seconds: 2), () {
-            if (mounted) {
-              setState(() {
-                _isAlertWindowOpen = false; //unlock the screen after 2 seconds
-              });
-            }
-          });
-        },
+        onDismiss: () => Navigator.pop(ctx),
       ),
-    );
+    ).then((_) {
+      // ✅ FIX: this fires whenever the dialog closes, regardless of
+      // *how* it closed (Dismiss button, back press, or anything else).
+      // Prevents _isAlertWindowOpen getting stuck at true and silently
+      // blocking every future detection.
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _isAlertWindowOpen = false;
+          });
+        }
+      });
+    });
   }
 
   @override

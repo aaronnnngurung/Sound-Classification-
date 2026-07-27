@@ -11,7 +11,6 @@ import 'flash_service.dart';
 
 @pragma('vm:entry-point')
 void startCallback() {
-
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
 
@@ -128,7 +127,12 @@ class ForegroundServiceManager {
           HapticService.instance.vibrateForSound(label);
           FlashService.instance.blinkForSound(label);
           onSoundDetected?.call(label, confidence);
-          _updateFallbackNotification(label, confidence);
+          final isAppOpen =
+              WidgetsBinding.instance.lifecycleState ==
+              AppLifecycleState.resumed;
+          if (!isAppOpen) {
+            _updateFallbackNotification(label, confidence);
+          }
         },
       );
 
@@ -246,30 +250,42 @@ class SoundDetectionTaskHandler extends TaskHandler {
   void _handleDetection(String label, double confidence) {
     if (!AudioMLService.isDetectionValid(label, confidence)) return;
 
-    HapticService.instance.vibrateForSound(label);
+    // Always blink
     FlashService.instance.blinkForSound(label);
 
+    // Always send to dashboard
+    print(
+      'TaskHandler: sending to dashboard — soundClass=$label confidence=$confidence',
+    );
     FlutterForegroundTask.sendDataToMain({
       'soundClass': label,
       'confidence': confidence,
     });
+    print('TaskHandler: sendDataToMain call completed');
 
-    FlutterForegroundTask.updateService(
-      notificationTitle: '🔊 $label Detected!',
-      notificationText: '${(confidence * 100).toStringAsFixed(0)}% confidence',
-    );
-    Future.delayed(
-      const Duration(seconds: 5),
-      () => FlutterForegroundTask.updateService(
-        notificationTitle: 'SoundClass Active',
-        notificationText: 'Monitoring your environment...',
-      ),
-    );
+    // Only show notification when app is NOT open
+    FlutterForegroundTask.isAppOnForeground.then((isInForeground) {
+      if (!isInForeground) {
+        FlutterForegroundTask.updateService(
+          notificationTitle: '🔊 $label Detected!',
+          notificationText:
+              '${(confidence * 100).toStringAsFixed(0)}% confidence',
+        );
+
+        Future.delayed(const Duration(seconds: 5), () {
+          FlutterForegroundTask.updateService(
+            notificationTitle: 'SoundClass Active',
+            notificationText: 'Monitoring your environment...',
+          );
+        });
+      }
+    });
   }
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     print('TaskHandler: onStart');
+
     if (_started) return;
     _started = true;
 
@@ -277,20 +293,11 @@ class SoundDetectionTaskHandler extends TaskHandler {
       final started = await AudioMLService.instance.startListening(
         onResult: _handleDetection,
       );
-      // Reflect what actually happened — previously this printed
-      // "audio started OK" unconditionally, even when startListening()
-      // had silently bailed out (e.g. the isolate-side permission
-      // re-check failing) and no recording was actually happening.
+
       if (started) {
         print('TaskHandler: audio started OK');
       } else {
-        print(
-          'TaskHandler: audio FAILED to start — will retry on next '
-          'heartbeat (see onRepeatEvent)',
-        );
-        // Let the next heartbeat's restart-if-not-listening check pick
-        // this back up instead of leaving _started stuck at true with
-        // no recording running.
+        print('TaskHandler: audio FAILED to start');
         _started = false;
       }
     } catch (e) {
@@ -308,9 +315,9 @@ class SoundDetectionTaskHandler extends TaskHandler {
 
     if (!AudioMLService.instance.isListening) {
       print('TaskHandler: restarting audio...');
-      AudioMLService.instance
-          .startListening(onResult: _handleDetection)
-          .then((started) {
+      AudioMLService.instance.startListening(onResult: _handleDetection).then((
+        started,
+      ) {
         print('TaskHandler: restart result = $started');
       });
     }

@@ -15,9 +15,12 @@ import 'permission_service.dart';
 import 'package:flutter_application_1/onboarding_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/foreground_service_manager.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterForegroundTask.initCommunicationPort();
+
   await Firebase.initializeApp();
 
   // Initialize foreground service settings
