@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../smartwatch/watch_sync_service.dart';
 import '../smartwatch/smartwatch_history.dart';
+import '../smartwatch/watch_round_safe_area.dart';
 
 class SmartwatchScreen extends StatefulWidget {
   const SmartwatchScreen({Key? key}) : super(key: key);
@@ -65,13 +66,15 @@ class _SmartwatchScreenState extends State<SmartwatchScreen>
   @override
   Widget build(BuildContext context) {
     final alert = _activeAlert;
+    // NOTE: removed the plain SafeArea wrapper that was here — it only
+    // handles rectangular system insets, not round-bezel clipping.
+    // WatchRoundSafeArea (used inside each state builder below) is the
+    // one actually doing that job now.
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: alert != null
-            ? _buildEmergencyState(alert)
-            : _buildMonitoringState(),
-      ),
+      body: alert != null
+          ? _buildEmergencyState(alert)
+          : _buildMonitoringState(),
     );
   }
 
@@ -82,95 +85,111 @@ class _SmartwatchScreenState extends State<SmartwatchScreen>
     // line) + "Connected to phone" (secondary line); not connected ->
     // "Not Connected" + "Waiting for phone...". Swap below if you meant
     // it the other way.
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          ScaleTransition(
-            scale: Tween(
-              begin: 0.9,
-              end: 1.0,
-            ).animate(_pulseController),
-            child: Icon(
-              _isConnected ? Icons.watch_rounded : Icons.watch_off_rounded,
-              color: _isConnected ? Colors.greenAccent : Colors.grey,
-              size: 48,
+    return WatchRoundSafeArea(
+      child: SingleChildScrollView(
+        // Scroll fallback rather than a fixed layout — on smaller round
+        // profiles this content could still be taller than the safe
+        // inscribed area even after insetting; scrolling beats silently
+        // clipping/overflowing.
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ScaleTransition(
+              scale: Tween(
+                begin: 0.9,
+                end: 1.0,
+              ).animate(_pulseController),
+              child: Icon(
+                _isConnected ? Icons.watch_rounded : Icons.watch_off_rounded,
+                color: _isConnected ? Colors.greenAccent : Colors.grey,
+                size: 36,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            _isConnected ? 'Monitoring...' : 'Not Connected',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+            const SizedBox(height: 8),
+            Text(
+              _isConnected ? 'Monitoring...' : 'Not Connected',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _isConnected ? 'Connected to phone' : 'Waiting for phone...',
-            style: TextStyle(color: Colors.grey[500], fontSize: 11),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          IconButton(
-            icon: const Icon(Icons.history_rounded, color: Colors.white70),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) =>
-                      SmartwatchHistoryScreen(initialHistory: _history),
-                ),
-              );
-            },
-          ),
-          const Text(
-            'History',
-            style: TextStyle(color: Colors.white54, fontSize: 10),
-          ),
-        ],
+            const SizedBox(height: 3),
+            Text(
+              _isConnected ? 'Connected to phone' : 'Waiting for phone...',
+              style: TextStyle(color: Colors.grey[500], fontSize: 10),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+            IconButton(
+              icon: const Icon(
+                Icons.history_rounded,
+                color: Colors.white70,
+                size: 22,
+              ),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        SmartwatchHistoryScreen(initialHistory: _history),
+                  ),
+                );
+              },
+            ),
+            const Text(
+              'History',
+              style: TextStyle(color: Colors.white54, fontSize: 9),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildEmergencyState(EmergencyAlert alert) {
+    // The full-bleed red background is deliberate — an unmissable,
+    // edge-to-edge alert fill. Only the TEXT/ICON content goes inside
+    // WatchRoundSafeArea; the background itself isn't inset.
     return Container(
       color: Colors.red[900],
       child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ScaleTransition(
-                scale: Tween(
-                  begin: 0.95,
-                  end: 1.15,
-                ).animate(_pulseController),
-                child: const Icon(
-                  Icons.warning_rounded,
-                  color: Colors.white,
-                  size: 56,
+        child: WatchRoundSafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ScaleTransition(
+                  scale: Tween(
+                    begin: 0.95,
+                    end: 1.15,
+                  ).animate(_pulseController),
+                  child: const Icon(
+                    Icons.warning_rounded,
+                    color: Colors.white,
+                    size: 44,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                _friendlyName(alert.soundClass).toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+                const SizedBox(height: 10),
+                Text(
+                  _friendlyName(alert.soundClass).toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '${(alert.confidence * 100).toStringAsFixed(0)}% confidence',
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-            ],
+                const SizedBox(height: 5),
+                Text(
+                  '${(alert.confidence * 100).toStringAsFixed(0)}% confidence',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
         ),
       ),

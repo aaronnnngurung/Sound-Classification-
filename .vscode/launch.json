@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Phone App",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "cwd": "${workspaceFolder}/flutter_application_1",
+      "deviceId": "emulator-5554",
+      "args": ["--flavor", "mobile"]
+    },
+    {
+      "name": "Watch App",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/smartwatch/watch_main.dart",
+      "cwd": "${workspaceFolder}/flutter_application_1",
+      "deviceId": "emulator-5556",
+      "args": ["--flavor", "wear"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Run Phone + Watch",
+      "configurations": ["Phone App", "Watch App"]
+    }
+  ]
+}
