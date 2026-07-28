@@ -109,19 +109,6 @@ class HapticService {
         // → buzz 150ms
         return [0, 150, 150, 150];
 
-      case 'clock_alarm':
-        // 5 medium pulses like a repeating alarm
-        return [0, 150, 100, 150, 100, 150, 100, 150, 100, 150];
-
-      case 'train':
-        // 1 very long sustained buzz
-        // feels like a train rumbling past
-        return [0, 900];
-
-      case 'fireworks':
-        // Irregular pattern — unpredictable bursts
-        return [0, 100, 150, 200, 80, 100, 200, 120, 80];
-
       default:
         // Generic single pulse for anything else
         return [0, 300];

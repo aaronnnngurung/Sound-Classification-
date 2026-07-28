@@ -279,46 +279,6 @@ class _DetectionHistoryScreenState extends State<DetectionHistoryScreen> {
                 ),
               ],
             ),
-      // Ailey lai this is just a temporary button and fake data to test data if it is working correctly. Paxi we will remove it.
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final db = DatabaseHelper.instance;
-          final uid = FirebaseAuth.instance.currentUser!.uid;
-
-          await db.insertDetection(
-            soundClass: 'siren',
-            displayLabel: 'Siren',
-            confidence: 0.94,
-            userId: uid,
-          );
-
-          await db.insertDetection(
-            soundClass: 'crying_baby',
-            displayLabel: 'Baby Crying',
-            confidence: 0.87,
-            userId: uid,
-          );
-
-          await db.insertDetection(
-            soundClass: 'fire_alarm',
-            displayLabel: 'Fire Alarm',
-            confidence: 0.91,
-            userId: uid,
-          );
-
-          _loadRecords();
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('3 test detections added'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        },
-        label: const Text('Add Test Data'),
-        icon: const Icon(Icons.add),
-        backgroundColor: Colors.orange,
-      ),
     );
   }
 

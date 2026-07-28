@@ -384,8 +384,8 @@ class _DetectionDashboardState extends State<DetectionDashboard>
         onDismiss: () => Navigator.pop(ctx),
       ),
     ).then((_) {
-      // ✅ FIX: this fires whenever the dialog closes, regardless of
-      // *how* it closed (Dismiss button, back press, or anything else).
+      // This fires whenever the dialog closes, regardless of
+      // how it closed (Dismiss button, back press, or anything else).
       // Prevents _isAlertWindowOpen getting stuck at true and silently
       // blocking every future detection.
       Future.delayed(const Duration(seconds: 2), () {
