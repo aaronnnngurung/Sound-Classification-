@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_application_1/login.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_application_1/homepage.dart';
-import 'package:flutter_application_1/login.dart';
+import 'package:flutter_application_1/signup_page.dart'; // Added SignUpPage import
 import 'package:flutter_application_1/forgot_password_page.dart';
 import 'package:flutter_application_1/wrapper.dart';
 import 'package:flutter_application_1/permission_screen.dart';
@@ -28,14 +29,7 @@ void main() async {
   // Initialize foreground service settings
   ForegroundServiceManager.initialize();
 
-  // Advertise this app as a watch-connectable capability, so the Wear
-  // OS companion app can detect "the SoundClass phone app is actually
-  // running" (see watch_sync_service.dart). NOT awaited on purpose —
-  // watch pairing isn't on the critical path to showing the UI, and a
-  // slow or unavailable Wearable API on this device (no Play Services,
-  // no paired watch, etc.) shouldn't delay app startup. Every failure
-  // path inside initializePhoneSide() is already caught internally, so
-  // this can't throw here even unawaited.
+  // Advertise this app as a watch-connectable capability
   WatchSyncService.instance.initializePhoneSide();
 
   await GoogleSignIn.instance.initialize(
@@ -79,13 +73,14 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'SoundClass',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF5B7CFA)),
         useMaterial3: true,
       ),
       debugShowCheckedModeBanner: false,
       home: homeScreen,
       routes: {
         '/login': (context) => const LoginPage(),
+        '/signup': (context) => const SignUpPage(), // Registered /signup route
         '/home': (context) => const HomePage(),
         '/forgot_password': (context) => const ForgotPasswordPage(),
         '/dashboard': (context) => const DetectionDashboard(),

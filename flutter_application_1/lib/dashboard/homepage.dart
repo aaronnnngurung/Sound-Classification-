@@ -29,6 +29,16 @@ class _HomePageState extends State<HomePage> {
   bool _isDetectionRunning = false;
   Timer? _statusTimer;
 
+  // 2026 Material 3 Design Tokens — shared with Login / SignUp
+  static const Color _primaryColor = Color(0xFF5B7CFA);
+  static const Color _primaryColorDeep = Color(0xFF4A63E0);
+  static const Color _backgroundColor = Color(0xFFF8FAFC);
+  static const Color _surfaceColor = Colors.white;
+  static const Color _borderColor = Color(0xFFE2E8F0);
+  static const Color _textPrimary = Color(0xFF1E293B);
+  static const Color _textSecondary = Color(0xFF64748B);
+  static const Color _successColor = Color(0xFF16A34A);
+
   final Map<String, Map<String, dynamic>> _soundConfig = {
     'siren': {
       'label': 'Siren',
@@ -147,9 +157,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Color _confidenceColor(double confidence) {
-    if (confidence >= 0.85) return Colors.green[600]!;
-    if (confidence >= 0.70) return Colors.orange[600]!;
-    return Colors.red[400]!;
+    if (confidence >= 0.85) return _successColor;
+    if (confidence >= 0.70) return const Color(0xFFD97706);
+    return const Color(0xFFDC2626);
   }
 
   String _formatTimeAgo(String timestamp) {
@@ -170,68 +180,80 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: _backgroundColor,
       body: RefreshIndicator(
+        color: _primaryColor,
         onRefresh: () async {
           await _loadData();
           await _refreshDetectionStatus();
         },
         child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
           slivers: [
-            // ── App Bar ──────────────────────────────
-            SliverAppBar(
-              expandedHeight: 130,
-              floating: false,
-              pinned: true,
-              backgroundColor: Colors.blue[600],
-              foregroundColor: Colors.white,
-              elevation: 0,
-              flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Colors.blue[700]!, Colors.blue[500]!],
+            // ── Header ───────────────────────────────
+            // A plain SliverToBoxAdapter instead of a SliverAppBar avoids the
+            // double top-inset (status bar padding + hardcoded padding) that
+            // was causing the large gap under the greeting.
+            SliverToBoxAdapter(
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.fromLTRB(20, topInset + 16, 20, 22),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [_primaryColorDeep, _primaryColor],
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Hello, $_username 👋',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Stay aware. Stay safe.',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.85),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  padding: const EdgeInsets.fromLTRB(20, 60, 20, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        'Hello, $_username 👋',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Stay aware. Stay safe.',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
+                    _HeaderIconButton(
+                      icon: Icons.notifications_rounded,
+                      onTap: () {},
+                    ),
+                  ],
                 ),
               ),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.notifications_rounded),
-                  onPressed: () {},
-                ),
-              ],
             ),
 
             SliverPadding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   // ── Detection Status Card ───────────
@@ -247,7 +269,7 @@ class _HomePageState extends State<HomePage> {
                           title: 'Total Detections',
                           value: _totalDetections.toString(),
                           icon: Icons.hearing_rounded,
-                          color: Colors.blue[600]!,
+                          color: _primaryColor,
                           subtitle: 'All time',
                         ),
                       ),
@@ -257,7 +279,7 @@ class _HomePageState extends State<HomePage> {
                           title: 'High Confidence',
                           value: _highConfidenceCount.toString(),
                           icon: Icons.verified_rounded,
-                          color: Colors.green[600]!,
+                          color: _successColor,
                           subtitle:
                               '${_totalDetections > 0 ? ((_highConfidenceCount / _totalDetections) * 100).toStringAsFixed(0) : 0}% of total',
                         ),
@@ -265,7 +287,7 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
                   // ── Recent Detections ───────────────
                   Row(
@@ -275,26 +297,38 @@ class _HomePageState extends State<HomePage> {
                         'Recent Detections',
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          fontWeight: FontWeight.w700,
+                          color: _textPrimary,
+                          letterSpacing: -0.2,
                         ),
                       ),
                       TextButton(
                         onPressed: () {},
-                        child: Text(
+                        style: TextButton.styleFrom(
+                          foregroundColor: _primaryColor,
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text(
                           'See All',
-                          style: TextStyle(
-                            color: Colors.blue[600],
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
 
                   if (_isLoading)
-                    const Center(child: CircularProgressIndicator())
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 32),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: _primaryColor,
+                          strokeWidth: 2.5,
+                        ),
+                      ),
+                    )
                   else if (_recentDetections.isEmpty)
                     _buildEmptyState()
                   else
@@ -315,13 +349,14 @@ class _HomePageState extends State<HomePage> {
   // Big, clearly visible status card — mirrors the "Start Sound
   // Detection" hero card style, but reflects REAL detection state
   // (polled from ForegroundServiceManager) instead of being static.
-  // Blue = idle / tap to start. Green + pulsing dot = actively listening.
+  // Indigo = idle / tap to start. Green + pulsing dot = actively listening.
   Widget _buildDetectionStatusCard() {
     return GestureDetector(
       onTap: () {
         Navigator.pushNamed(context, '/dashboard');
       },
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -329,26 +364,26 @@ class _HomePageState extends State<HomePage> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: _isDetectionRunning
-                ? [Colors.green[500]!, Colors.green[700]!]
-                : [Colors.blue[500]!, Colors.blue[700]!],
+                ? [const Color(0xFF22C55E), _successColor]
+                : [_primaryColor, _primaryColorDeep],
           ),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: (_isDetectionRunning ? Colors.green : Colors.blue)
-                  .withOpacity(0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
+              color: (_isDetectionRunning ? _successColor : _primaryColor)
+                  .withOpacity(0.28),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
         child: Row(
           children: [
             Container(
-              width: 56,
-              height: 56,
+              width: 54,
+              height: 54,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withOpacity(0.18),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -356,7 +391,7 @@ class _HomePageState extends State<HomePage> {
                     ? Icons.mic_rounded
                     : Icons.mic_none_rounded,
                 color: Colors.white,
-                size: 30,
+                size: 28,
               ),
             ),
             const SizedBox(width: 16),
@@ -366,26 +401,23 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        _isDetectionRunning
-                            ? 'Listening...'
-                            : 'Start Sound Detection',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
+                      Flexible(
+                        child: Text(
+                          _isDetectionRunning
+                              ? 'Listening...'
+                              : 'Start Sound Detection',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       if (_isDetectionRunning) ...[
                         const SizedBox(width: 8),
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
+                        const _PulsingDot(),
                       ],
                     ],
                   ),
@@ -395,8 +427,9 @@ class _HomePageState extends State<HomePage> {
                         ? 'Monitoring your environment in real time'
                         : 'Detect sirens, alarms, horns and more',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.85),
+                      color: Colors.white.withOpacity(0.88),
                       fontSize: 12,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],
@@ -404,7 +437,7 @@ class _HomePageState extends State<HomePage> {
             ),
             Icon(
               Icons.chevron_right_rounded,
-              color: Colors.white.withOpacity(0.8),
+              color: Colors.white.withOpacity(0.85),
             ),
           ],
         ),
@@ -422,12 +455,13 @@ class _HomePageState extends State<HomePage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _borderColor, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
+            color: const Color(0xFF0F172A).withOpacity(0.03),
+            blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
@@ -435,27 +469,23 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-            ],
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 20),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Text(
             value,
             style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: color,
+              fontSize: 26,
+              fontWeight: FontWeight.w700,
+              color: _textPrimary,
+              letterSpacing: -0.5,
             ),
           ),
           const SizedBox(height: 2),
@@ -464,13 +494,13 @@ class _HomePageState extends State<HomePage> {
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: _textPrimary,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             subtitle,
-            style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+            style: const TextStyle(fontSize: 11, color: _textSecondary),
           ),
         ],
       ),
@@ -490,13 +520,14 @@ class _HomePageState extends State<HomePage> {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderColor, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: const Color(0xFF0F172A).withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -520,16 +551,16 @@ class _HomePageState extends State<HomePage> {
                   label,
                   style: const TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    fontWeight: FontWeight.w700,
+                    color: _textPrimary,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 // Confidence label
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
-                    vertical: 2,
+                    vertical: 3,
                   ),
                   decoration: BoxDecoration(
                     color: _confidenceColor(confidence).withOpacity(0.1),
@@ -539,7 +570,7 @@ class _HomePageState extends State<HomePage> {
                     _confidenceLabel(confidence),
                     style: TextStyle(
                       fontSize: 10,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w700,
                       color: _confidenceColor(confidence),
                     ),
                   ),
@@ -549,7 +580,7 @@ class _HomePageState extends State<HomePage> {
           ),
           Text(
             _formatTimeAgo(timestamp),
-            style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+            style: const TextStyle(fontSize: 11, color: _textSecondary),
           ),
         ],
       ),
@@ -558,26 +589,102 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildEmptyState() {
     return Container(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
       alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _borderColor, width: 1),
+      ),
       child: Column(
         children: [
-          Icon(Icons.hearing_rounded, size: 56, color: Colors.grey[300]),
-          const SizedBox(height: 12),
-          Text(
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: _primaryColor.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.hearing_rounded, size: 30, color: _primaryColor.withOpacity(0.6)),
+          ),
+          const SizedBox(height: 14),
+          const Text(
             'No detections yet',
             style: TextStyle(
-              color: Colors.grey[500],
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
+              color: _textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
+          const SizedBox(height: 4),
+          const Text(
             'Start detection to see results here',
-            style: TextStyle(color: Colors.grey[400], fontSize: 12),
+            style: TextStyle(color: _textSecondary, fontSize: 12),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Circular translucent icon button used in the header (notifications, etc.)
+class _HeaderIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _HeaderIconButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withOpacity(0.16),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(10.0),
+          child: Icon(icon, color: Colors.white, size: 20),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small pulsing dot indicating live/active detection state.
+class _PulsingDot extends StatefulWidget {
+  const _PulsingDot();
+
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1000),
+  )..repeat(reverse: true);
+
+  late final Animation<double> _opacity = Tween<double>(begin: 0.4, end: 1.0)
+      .animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+        ),
       ),
     );
   }
