@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/foreground_service_manager.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_application_1/smartwatch/watch_sync_service.dart';
+import 'package:flutter_application_1/main_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -93,6 +94,7 @@ class MyApp extends StatelessWidget {
         '/history': (context) => const DetectionHistoryScreen(),
         '/permissions': (context) => const PermissionScreen(),
         '/onboarding': (context) => const OnboardingScreen(),
+        '/main': (context) => const MainScreen(),
       },
     );
   }

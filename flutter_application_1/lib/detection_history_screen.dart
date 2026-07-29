@@ -234,11 +234,24 @@ class _DetectionHistoryScreenState extends State<DetectionHistoryScreen> {
     _loadRecords();
   }
 
+  String _confidenceLabelText(double confidence) {
+    if (confidence >= 0.85) return 'High Confidence';
+    if (confidence >= 0.70) return 'Medium Confidence';
+    return 'Low Confidence';
+  }
+
+  Color _confidenceLabelColor(double confidence) {
+    if (confidence >= 0.85) return Colors.green[600]!;
+    if (confidence >= 0.70) return Colors.orange[600]!;
+    return Colors.red[400]!;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text(
           'Detection History',
           style: TextStyle(fontWeight: FontWeight.w600),
@@ -534,6 +547,35 @@ class _DetectionHistoryScreenState extends State<DetectionHistoryScreen> {
                     ],
                   ),
                   const SizedBox(height: 4),
+
+                  // Confidence label badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _confidenceLabelColor(confidence).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: _confidenceLabelColor(
+                          confidence,
+                        ).withOpacity(0.3),
+                      ),
+                    ),
+                    child: Text(
+                      _confidenceLabelText(confidence),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: _confidenceLabelColor(confidence),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  // Existing confidence bar
                   Row(
                     children: [
                       Container(
