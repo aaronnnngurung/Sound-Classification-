@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter_wear_os_connectivity/flutter_wear_os_connectivity.dart';
 import 'package:vibration/vibration.dart';
 import 'watch_notification_service.dart';
-
+import 'package:flutter_application_1/utils/emergency.dart';
 /// A single emergency event — used on BOTH sides: the phone constructs
 /// one to send, the watch reconstructs one from the incoming DataItem.
 class EmergencyAlert {

@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 
+import 'package:flutter_application_1/utils/emergency.dart';
+
 class ProfileScreen extends StatelessWidget {
   final VoidCallback? onOpenSettings;
 

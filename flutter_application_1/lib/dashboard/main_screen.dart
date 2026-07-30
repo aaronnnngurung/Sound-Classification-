@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'homepage.dart';
 import 'detection_history_screen.dart';
 import 'detection_dashboard.dart';
-import 'settings_screen.dart';
-import 'profile_screen.dart';
+import '../profile/settings_screen.dart';
+import '../profile/profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);

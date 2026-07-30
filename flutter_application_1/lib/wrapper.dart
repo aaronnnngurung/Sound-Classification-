@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'main_screen.dart';
-import 'login.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dashboard/main_screen.dart';
+import 'auth/login.dart';
+import 'auth/complete_profile_page.dart';
 import 'guardian/guardian_main_screen.dart';
 
 class Wrapper extends StatelessWidget {
@@ -22,30 +23,45 @@ class Wrapper extends StatelessWidget {
             ),
           );
         }
+
         if (snapshot.hasData) {
-        return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance
-              .collection('users')
-              .doc(snapshot.data!.uid)
-              .get(),
-          builder: (context, userSnapshot) {
-            if (userSnapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
-            }
+          final user = snapshot.data!;
 
-            final userData =
-                userSnapshot.data?.data() as Map<String, dynamic>?;
+          return FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .get(),
+            builder: (context, userSnapshot) {
+              if (userSnapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
 
-            if (userData?['role'] == 'guardian') {
-              return const GuardianMainScreen();
-      }
+              final userData =
+                  userSnapshot.data?.data() as Map<String, dynamic>?;
 
-      return const MainScreen();
-    },
-  );
-}
+              // 1. Incomplete Profile check (Google users who haven't selected a role)
+              if (!userSnapshot.data!.exists || userData == null || userData['role'] == null) {
+                return CompleteProfilePage(
+                  uid: user.uid,
+                  email: user.email ?? '',
+                  defaultName: user.displayName ?? '',
+                );
+              }
+
+              // 2. Guardian Role check
+              if (userData['role'] == 'guardian') {
+                return const GuardianMainScreen();
+              }
+
+              // 3. Deaf User default home
+              return const MainScreen();
+            },
+          );
+        }
+
         return const LoginPage();
       },
     );

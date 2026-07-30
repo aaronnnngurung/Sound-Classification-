@@ -1,5 +1,5 @@
 import 'package:flutter/services.dart';
-import 'smartwatch/watch_sync_service.dart'; // Make sure this path is correct
+import 'package:flutter_application_1/smartwatch/watch_sync_service.dart'; // Make sure this path is correct
 
 class AlertNotificationService {
   static final AlertNotificationService instance = AlertNotificationService._();

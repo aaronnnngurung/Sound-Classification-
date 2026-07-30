@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_application_1/login.dart';
+import 'package:flutter_application_1/auth/login.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter_application_1/homepage.dart';
-import 'package:flutter_application_1/signup_page.dart'; // Added SignUpPage import
-import 'package:flutter_application_1/forgot_password_page.dart';
+import 'package:flutter_application_1/dashboard/homepage.dart';
+import 'package:flutter_application_1/auth/signup_page.dart'; // Added SignUpPage import
+import 'package:flutter_application_1/auth/forgot_password_page.dart';
 import 'package:flutter_application_1/wrapper.dart';
-import 'package:flutter_application_1/permission_screen.dart';
-import 'package:flutter_application_1/detection_dashboard.dart';
-import 'package:flutter_application_1/profile_screen.dart';
-import 'package:flutter_application_1/settings_screen.dart';
-import 'package:flutter_application_1/detection_history_screen.dart';
-import 'permission_service.dart';
-import 'package:flutter_application_1/onboarding_screen.dart';
+import 'package:flutter_application_1/permissions/permission_screen.dart';
+import 'package:flutter_application_1/dashboard/detection_dashboard.dart';
+import 'package:flutter_application_1/profile/profile_screen.dart';
+import 'package:flutter_application_1/profile/settings_screen.dart';
+import 'package:flutter_application_1/dashboard/detection_history_screen.dart';
+import 'services/permission_service.dart';
+import 'package:flutter_application_1/auth/onboarding_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_application_1/foreground_service_manager.dart';
+import 'package:flutter_application_1/services/foreground_service_manager.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_application_1/smartwatch/watch_sync_service.dart';
-import 'package:flutter_application_1/main_screen.dart';
+import 'package:flutter_application_1/dashboard/main_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

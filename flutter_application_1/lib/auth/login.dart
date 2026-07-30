@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'forgot_password_page.dart';
 import 'signup_page.dart';
 import 'complete_profile_page.dart';
+
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
 
@@ -27,7 +28,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
 
-  // 2026 Material 3 Design Tokens
+  // Material 3 Design Tokens
   static const Color _primaryColor = Color(0xFF5B7CFA);
   static const Color _primaryColorDeep = Color(0xFF4A63E0);
   static const Color _surfaceColor = Colors.white;
@@ -83,6 +84,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     }
   }
 
+  // Email/Password Login Function
   Future<void> _login() async {
     setState(() {
       _isLoading = true;
@@ -102,14 +104,56 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     }
 
     try {
-      await _auth.signInWithEmailAndPassword(
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+
+      User? user = userCredential.user;
+
+      if (user != null && mounted) {
+        // Fetch user document from Firestore
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        final data = userDoc.data() as Map<String, dynamic>?;
+
+        // If user document is missing or role isn't assigned yet
+        if (!userDoc.exists || data == null || data['role'] == null) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (context) => CompleteProfilePage(
+                uid: user.uid,
+                email: user.email ?? '',
+                defaultName: user.displayName ?? '',
+              ),
+            ),
+            (route) => false,
+          );
+        } else {
+          // Route user based on role stored in Firestore
+          String role = data['role'];
+          if (role == 'guardian') {
+            Navigator.of(context).pushNamedAndRemoveUntil('/guardianHome', (route) => false);
+          } else {
+            Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+          }
+        }
+      }
     } on FirebaseAuthException catch (e) {
-      setState(() {
-        _errorMessage = e.message;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.message;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = "An unexpected error occurred: $e";
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -119,97 +163,98 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     }
   }
 
+  // Google Sign-In Function
   Future<void> signInWithGoogle() async {
-  setState(() {
-    _isLoading = true;
-    _errorMessage = null;
-  });
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-  // Check Internet First
-  bool isConnected = await _hasInternetConnection();
-  if (!isConnected) {
-    if (mounted) {
-      setState(() {
-        _errorMessage = "No internet connection. Please connect to the internet and try again.";
-        _isLoading = false;
-      });
-    }
-    return;
-  }
-
-  try {
-    final googleSignIn = GoogleSignIn.instance;
-    final GoogleSignInAccount? googleUser = await googleSignIn.authenticate();
-
-    if (googleUser == null) {
-      setState(() {
-        _isLoading = false;
-      });
+    // Check Internet First
+    bool isConnected = await _hasInternetConnection();
+    if (!isConnected) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = "No internet connection. Please connect to the internet and try again.";
+          _isLoading = false;
+        });
+      }
       return;
     }
 
-    final GoogleSignInAuthentication googleAuth = googleUser.authentication;
-    final authClient = googleSignIn.authorizationClient;
-    final authorization = await authClient.authorizeScopes(['email', 'profile']);
-    final String? accessToken = authorization.accessToken;
+    try {
+      final googleSignIn = GoogleSignIn.instance;
+      final GoogleSignInAccount? googleUser = await googleSignIn.authenticate();
 
-    final credential = GoogleAuthProvider.credential(
-      idToken: googleAuth.idToken,
-      accessToken: accessToken,
-    );
+      if (googleUser == null) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
 
-    UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-    User? user = userCredential.user;
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+      final authClient = googleSignIn.authorizationClient;
+      final authorization = await authClient.authorizeScopes(['email', 'profile']);
+      final String? accessToken = authorization.accessToken;
 
-    if (user != null && mounted) {
-      // 1. Fetch user document from Firestore
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+        accessToken: accessToken,
+      );
 
-      final data = userDoc.data() as Map<String, dynamic>?;
+      UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      User? user = userCredential.user;
 
-      // 2. If user is NEW or HAS NO ROLE, send them to CompleteProfilePage
-      if (!userDoc.exists || data == null || data['role'] == null) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (context) => CompleteProfilePage(
-              uid: user.uid,
-              email: user.email ?? '',
-              defaultName: user.displayName ?? '',
+      if (user != null && mounted) {
+        // Fetch user document from Firestore
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        final data = userDoc.data() as Map<String, dynamic>?;
+
+        // If user is NEW or HAS NO ROLE, redirect to CompleteProfilePage
+        if (!userDoc.exists || data == null || data['role'] == null) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (context) => CompleteProfilePage(
+                uid: user.uid,
+                email: user.email ?? '',
+                defaultName: user.displayName ?? '',
+              ),
             ),
-          ),
-          (route) => false,
-        );
-      } else {
-        // 3. User exists and already has a role set -> Redirect based on role
-        String role = data['role'];
-        if (role == 'guardian') {
-          Navigator.of(context).pushNamedAndRemoveUntil('/guardianHome', (route) => false);
+            (route) => false,
+          );
         } else {
-          Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+          // User exists and already has a role set -> Redirect based on role
+          String role = data['role'];
+          if (role == 'guardian') {
+            Navigator.of(context).pushNamedAndRemoveUntil('/guardianHome', (route) => false);
+          } else {
+            Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+          }
         }
       }
-    }
-  } catch (e) {
-    print("Google Sign-In Error: $e");
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Google Sign-In failed: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  } finally {
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
+    } catch (e) {
+      print("Google Sign-In Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Google Sign-In failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -263,7 +308,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              // Standout Hero Logo
+                              // Hero Logo
                               const Center(child: _AppLogo()),
                               const SizedBox(height: 28),
 
@@ -328,7 +373,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                     ),
                                     const SizedBox(height: 24),
 
-                                    // Error Card Banner
+                                    // Error Banner
                                     AnimatedSwitcher(
                                       duration: const Duration(milliseconds: 250),
                                       transitionBuilder: (child, animation) => SizeTransition(
@@ -585,7 +630,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   }
 }
 
-/// Soft glowing background orb used to add ambient depth without a heavy gradient.
+/// Glowing background orb helper widget
 class _GlowOrb extends StatelessWidget {
   final double size;
   final Color color;
@@ -617,9 +662,7 @@ class _GlowOrb extends StatelessWidget {
   }
 }
 
-/// Hero logo tile shared between Login and SignUp pages.
-/// Wrapped in a subtle gradient ring + layered shadow so it stands out
-/// as the visual anchor of the screen without relying on bright color.
+/// App Logo Widget
 class _AppLogo extends StatelessWidget {
   final double size;
 
@@ -674,7 +717,7 @@ class _AppLogo extends StatelessWidget {
   }
 }
 
-/// Rounded Material error banner replacing plain error text.
+/// Error banner widget
 class _ErrorBanner extends StatelessWidget {
   final String message;
 

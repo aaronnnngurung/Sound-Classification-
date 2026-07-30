@@ -2,15 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'foreground_service_manager.dart';
-import 'permission_service.dart';
-import 'database_helper.dart';
-import 'background_permission_helper.dart';
-import 'haptic_service.dart';
-import 'alert_notification_service.dart';
-import 'flash_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'guardian/guardian_notification_api.dart';
+
+// Services
+import 'package:flutter_application_1/services/foreground_service_manager.dart';
+import 'package:flutter_application_1/services/permission_service.dart';
+import 'package:flutter_application_1/services/haptic_service.dart';
+import 'package:flutter_application_1/services/alert_notification_service.dart';
+import 'package:flutter_application_1/services/flash_service.dart';
+
+// Utils
+import 'package:flutter_application_1/utils/database_helper.dart';
+import 'package:flutter_application_1/utils/background_permission_helper.dart';
+
+// Guardian
+import 'package:flutter_application_1/guardian/guardian_notification_api.dart';
+import 'package:flutter_application_1/smartwatch/watch_sync_service.dart';
 
 class DetectionDashboard extends StatefulWidget {
   const DetectionDashboard({Key? key}) : super(key: key);
@@ -294,6 +301,14 @@ class _DetectionDashboardState extends State<DetectionDashboard>
 
     final config = _soundConfig[soundClass];
     if (config == null) return;
+
+    WatchSyncService.instance.sendEmergencyAlert(
+    EmergencyAlert(
+      soundClass: soundClass,
+      confidence: confidence,
+      timestamp: DateTime.now(),
+    ),
+  );
 
     HapticService.instance.vibrateForSound(soundClass);
 

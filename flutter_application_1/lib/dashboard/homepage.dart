@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'database_helper.dart';
-import 'foreground_service_manager.dart';
+import '../utils/database_helper.dart';
+import '../services/foreground_service_manager.dart';
 
 class HomePage extends StatefulWidget {
   // Called when the user taps the detection status card — lets

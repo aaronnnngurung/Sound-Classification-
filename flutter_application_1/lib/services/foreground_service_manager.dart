@@ -1,16 +1,20 @@
-// foreground_service_manager.dart
 import 'dart:async';
-import 'dart:ui'; // Add this for DartPluginRegistrant
-import 'package:flutter/widgets.dart'; // Add this for WidgetsFlutterBinding
+import 'dart:ui';
+import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'audio_ml_service.dart';
-import 'haptic_service.dart';
-import 'flash_service.dart';
-import 'emergency.dart';
-import 'package:flutter_application_1/smartwatch/watch_sync_service.dart';
 
+// Internal Services
+import 'package:flutter_application_1/services/audio_ml_service.dart';
+import 'package:flutter_application_1/services/haptic_service.dart';
+import 'package:flutter_application_1/services/flash_service.dart';
+
+// Utils
+import 'package:flutter_application_1/utils/emergency.dart';
+
+// Smartwatch
+import 'package:flutter_application_1/smartwatch/watch_sync_service.dart';
 
 @pragma('vm:entry-point')
 void startCallback() {
@@ -134,6 +138,13 @@ class ForegroundServiceManager {
           // and NO notification — not a partial suppression.
           if (!await EmergencyModeService.shouldAlert(label)) return;
 
+          WatchSyncService.instance.sendEmergencyAlert(
+          EmergencyAlert(
+            soundClass: label,
+            confidence: confidence,
+            timestamp: DateTime.now(),
+          ),
+        );
           HapticService.instance.vibrateForSound(label);
           FlashService.instance.blinkForSound(label);
           onSoundDetected?.call(label, confidence);
