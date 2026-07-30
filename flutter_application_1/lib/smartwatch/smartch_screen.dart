@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../smartwatch/watch_sync_service.dart';
 import '../smartwatch/smartwatch_history.dart';
 import '../smartwatch/watch_round_safe_area.dart';
+import '../utils/emergency.dart';
 
 class SmartwatchScreen extends StatefulWidget {
   const SmartwatchScreen({Key? key}) : super(key: key);
@@ -14,12 +15,14 @@ class SmartwatchScreen extends StatefulWidget {
 class _SmartwatchScreenState extends State<SmartwatchScreen>
     with SingleTickerProviderStateMixin {
   bool _isConnected = false;
+  bool _isEmergencyMode = false;
   EmergencyAlert? _activeAlert;
   final List<EmergencyAlert> _history = [];
 
   late final AnimationController _pulseController;
   StreamSubscription<EmergencyAlert>? _alertSub;
   StreamSubscription<bool>? _connectionSub;
+  StreamSubscription<bool>? _emergencyModeSub;
 
   @override
   void initState() {
@@ -36,14 +39,27 @@ class _SmartwatchScreenState extends State<SmartwatchScreen>
     ) {
       if (mounted) setState(() => _isConnected = connected);
     });
+    _emergencyModeSub = WatchSyncService.instance.emergencyModeStream.listen((
+      enabled,
+    ) {
+      if (mounted) setState(() => _isEmergencyMode = enabled);
+    });
   }
 
   @override
   void dispose() {
     _alertSub?.cancel();
     _connectionSub?.cancel();
+    _emergencyModeSub?.cancel();
     _pulseController.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleEmergencyMode() async {
+    final newState = !_isEmergencyMode;
+    setState(() => _isEmergencyMode = newState);
+    await EmergencyModeService.setEnabled(newState);
+    await WatchSyncService.instance.sendEmergencyModeToggle(newState);
   }
 
   void _onAlertReceived(EmergencyAlert alert) {
@@ -122,7 +138,57 @@ class _SmartwatchScreenState extends State<SmartwatchScreen>
               style: TextStyle(color: Colors.grey[500], fontSize: 10),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: _toggleEmergencyMode,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: _isEmergencyMode
+                      ? Colors.red.withOpacity(0.25)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _isEmergencyMode
+                        ? Colors.redAccent
+                        : Colors.white24,
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _isEmergencyMode
+                          ? Icons.emergency_rounded
+                          : Icons.emergency_outlined,
+                      color: _isEmergencyMode
+                          ? Colors.redAccent
+                          : Colors.white54,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _isEmergencyMode ? 'Emergency ON' : 'Emergency OFF',
+                      style: TextStyle(
+                        color: _isEmergencyMode
+                            ? Colors.redAccent
+                            : Colors.white54,
+                        fontSize: 10,
+                        fontWeight: _isEmergencyMode
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
             IconButton(
               icon: const Icon(
                 Icons.history_rounded,

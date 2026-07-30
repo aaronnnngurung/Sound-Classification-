@@ -3,6 +3,7 @@ import 'package:flutter_wear_os_connectivity/flutter_wear_os_connectivity.dart';
 import 'package:vibration/vibration.dart';
 import 'watch_notification_service.dart';
 import 'package:flutter_application_1/utils/emergency.dart';
+
 /// A single emergency event — used on BOTH sides: the phone constructs
 /// one to send, the watch reconstructs one from the incoming DataItem.
 class EmergencyAlert {
@@ -44,10 +45,7 @@ class WatchSyncService {
   WatchSyncService._();
 
   static const String _dataPath = '/emergency-alert';
-  // Advertised by the phone so the watch can tell "a phone is nearby"
-  // apart from "the SoundClass phone app is actually running and
-  // reachable" — a real Bluetooth connection alone doesn't mean the
-  // companion app is installed/active on the other end.
+  static const String _emergencyModeTogglePath = '/emergency-mode-toggle';
   static const String _phoneCapability = 'soundclass_phone_app';
 
   final FlutterWearOsConnectivity _connectivity = FlutterWearOsConnectivity();
@@ -57,6 +55,9 @@ class WatchSyncService {
 
   final _connectionController = StreamController<bool>.broadcast();
   Stream<bool> get connectionStream => _connectionController.stream;
+
+  final _emergencyModeController = StreamController<bool>.broadcast();
+  Stream<bool> get emergencyModeStream => _emergencyModeController.stream;
 
   bool _configured = false;
 
@@ -78,6 +79,23 @@ class WatchSyncService {
     } catch (e) {
       print('WatchSyncService: registerNewCapability failed: $e');
     }
+
+    _connectivity
+        .dataChanged(
+          pathURI: Uri(scheme: 'wear', host: '*', path: _emergencyModeTogglePath),
+        )
+        .listen((dataEvents) {
+          for (final event in dataEvents) {
+            if (event.type != DataEventType.changed) continue;
+            try {
+              final enabled = event.dataItem.mapData['enabled'] as bool;
+              EmergencyModeService.setEnabled(enabled);
+              print('WatchSyncService: emergency mode toggled from watch -> $enabled');
+            } catch (e) {
+              print('WatchSyncService: failed to parse emergency mode toggle: $e');
+            }
+          }
+        });
   }
 
   /// Call this from the phone for every detection that already passed
@@ -102,6 +120,23 @@ class WatchSyncService {
       );
     } catch (e) {
       print('WatchSyncService: sendEmergencyAlert failed: $e');
+    }
+  }
+
+  /// Called from the watch to send the initial emergency mode state
+  /// request, or from the phone to push the current state to the watch
+  /// when a connection is established.
+  Future<void> sendEmergencyModeToggle(bool enabled) async {
+    await _ensureConfigured();
+    try {
+      await _connectivity.syncData(
+        path: _emergencyModeTogglePath,
+        data: {'enabled': enabled},
+        isUrgent: true,
+      );
+      print('WatchSyncService: sent emergency mode toggle -> $enabled');
+    } catch (e) {
+      print('WatchSyncService: sendEmergencyModeToggle failed: $e');
     }
   }
 
@@ -165,5 +200,6 @@ class WatchSyncService {
   void dispose() {
     _alertController.close();
     _connectionController.close();
+    _emergencyModeController.close();
   }
 }

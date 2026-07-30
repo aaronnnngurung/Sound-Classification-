@@ -138,7 +138,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           if (role == 'guardian') {
             Navigator.of(context).pushNamedAndRemoveUntil('/guardianHome', (route) => false);
           } else {
-            Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+            Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
           }
         }
       }
@@ -233,7 +233,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           if (role == 'guardian') {
             Navigator.of(context).pushNamedAndRemoveUntil('/guardianHome', (route) => false);
           } else {
-            Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+            Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
           }
         }
       }
