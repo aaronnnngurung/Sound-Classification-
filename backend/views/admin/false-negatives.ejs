@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>False Negative Reports — Admin</title>
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <header>
+    <h1>False Negative Reports</h1>
+    <div class="admin-info">
+      Logged in as <strong><%= user.displayName || user.email %></strong>
+    </div>
+  </header>
+
+  <div class="stats-bar">
+    <span class="stat"><strong>Total:</strong> <%= counts.total %></span>
+    <span class="stat open"><strong>Open:</strong> <%= counts.open %></span>
+    <span class="stat reviewed"><strong>Reviewed:</strong> <%= counts.reviewed %></span>
+    <span class="stat resolved"><strong>Resolved:</strong> <%= counts.resolved %></span>
+  </div>
+
+  <form class="filter-form" method="GET" action="/api/admin/false-negatives/view">
+    <label for="status">Filter by status:</label>
+    <select name="status" id="status" onchange="this.form.submit()">
+      <option value="">All</option>
+      <option value="open" <%= currentStatus === 'open' ? 'selected' : '' %>>Open</option>
+      <option value="reviewed" <%= currentStatus === 'reviewed' ? 'selected' : '' %>>Reviewed</option>
+      <option value="resolved" <%= currentStatus === 'resolved' ? 'selected' : '' %>>Resolved</option>
+    </select>
+  </form>
+
+  <% if (reports.length === 0) { %>
+    <p class="empty">No reports found.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>User</th>
+          <th>Sound Type</th>
+          <th>Occurred At</th>
+          <th>Description</th>
+          <th>Device Info</th>
+          <th>Status</th>
+          <th>Reviewed By</th>
+          <th>Admin Notes</th>
+          <th>Submitted</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% reports.forEach(function(r) { %>
+          <tr class="status-<%= r.status %>">
+            <td><%= r.id %></td>
+            <td><%= r.user ? (r.user.displayName || r.user.email) : '—' %></td>
+            <td><%= r.soundType || '—' %></td>
+            <td><%= new Date(r.occurredAt).toLocaleString() %></td>
+            <td class="desc"><%= r.description || '—' %></td>
+            <td><%= r.deviceInfo || '—' %></td>
+            <td><span class="badge badge-<%= r.status %>"><%= r.status %></span></td>
+            <td><%= r.reviewer ? (r.reviewer.displayName || r.reviewer.email) : '—' %></td>
+            <td class="desc"><%= r.adminNotes || '—' %></td>
+            <td><%= new Date(r.createdAt).toLocaleString() %></td>
+            <td>
+              <button class="btn-update" data-id="<%= r.id %>" data-status="<%= r.status %>" data-notes="<%= r.adminNotes || '' %>">Update</button>
+            </td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  <% } %>
+
+  <!-- Update Modal -->
+  <div id="updateModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h2>Update Report #<span id="modalReportId"></span></h2>
+      <form id="updateForm">
+        <input type="hidden" id="reportId">
+        <label for="updateStatus">Status:</label>
+        <select id="updateStatus" required>
+          <option value="open">Open</option>
+          <option value="reviewed">Reviewed</option>
+          <option value="resolved">Resolved</option>
+        </select>
+        <label for="updateNotes">Admin Notes:</label>
+        <textarea id="updateNotes" rows="4"></textarea>
+        <button type="submit">Save</button>
+        <button type="button" class="btn-cancel">Cancel</button>
+      </form>
+      <p id="updateMessage" class="hidden"></p>
+    </div>
+  </div>
+
+  <script>
+    // In dev mode, use mock token injected by server
+    let authToken = '<%= devToken || '' %>' || localStorage.getItem('adminToken');
+
+    // Modal elements
+    const modal = document.getElementById('updateModal');
+    const closeBtn = document.querySelector('.close');
+    const cancelBtn = document.querySelector('.btn-cancel');
+    const reportIdInput = document.getElementById('reportId');
+    const modalReportId = document.getElementById('modalReportId');
+    const updateStatus = document.getElementById('updateStatus');
+    const updateNotes = document.getElementById('updateNotes');
+    const updateForm = document.getElementById('updateForm');
+    const updateMessage = document.getElementById('updateMessage');
+
+    // Open modal
+    document.querySelectorAll('.btn-update').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const id = this.dataset.id;
+        const status = this.dataset.status;
+        const notes = this.dataset.notes;
+        reportIdInput.value = id;
+        modalReportId.textContent = id;
+        updateStatus.value = status;
+        updateNotes.value = notes;
+        updateMessage.classList.add('hidden');
+        modal.classList.remove('hidden');
+      });
+    });
+
+    function closeModal() {
+      modal.classList.add('hidden');
+    }
+    closeBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) closeModal();
+    });
+
+    // Submit update via PATCH
+    updateForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const id = reportIdInput.value;
+      const body = {
+        status: updateStatus.value,
+        adminNotes: updateNotes.value,
+      };
+
+      try {
+        const res = await fetch('/api/admin/false-negatives/' + id, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { 'Authorization': 'Bearer ' + authToken } : {}),
+          },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          updateMessage.textContent = 'Report updated successfully!';
+          updateMessage.className = 'success';
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          updateMessage.textContent = 'Error: ' + (data.error || 'Unknown error');
+          updateMessage.className = 'error';
+        }
+      } catch (err) {
+        updateMessage.textContent = 'Network error';
+        updateMessage.className = 'error';
+      }
+      updateMessage.classList.remove('hidden');
+    });
+  </script>
+</body>
+</html>
