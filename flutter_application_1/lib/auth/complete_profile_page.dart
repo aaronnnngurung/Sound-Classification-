@@ -1,6 +1,9 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_application_1/dashboard/main_screen.dart';
+import 'package:flutter_application_1/guardian/guardian_main_screen.dart';
 
 class CompleteProfilePage extends StatefulWidget {
   final String uid;
@@ -22,6 +25,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _guardianCodeController = TextEditingController();
 
   String _selectedRole = 'deaf'; // Default selection
   bool _isLoading = false;
@@ -43,6 +47,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _guardianCodeController.dispose();
     super.dispose();
   }
 
@@ -61,7 +66,41 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
     try {
       final String username = _nameController.text.trim();
       final String phone = _phoneController.text.trim();
-      
+
+      // Validate Guardian Link Code if registering as a Guardian
+      String? deafUserUid;
+
+      if (_selectedRole == 'guardian') {
+        final codeSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .where(
+              'guardianCode',
+              isEqualTo: _guardianCodeController.text.trim().toUpperCase(),
+            )
+            .limit(1)
+            .get();
+
+        if (codeSnapshot.docs.isEmpty) {
+          throw Exception('Invalid Guardian Link Code');
+        }
+
+        deafUserUid = codeSnapshot.docs.first.id;
+
+        final existingLink = await FirebaseFirestore.instance
+            .collection('guardian_links')
+            .doc(deafUserUid)
+            .get();
+
+        if (existingLink.exists) {
+          throw Exception(
+            'This Deaf User already has a connected Guardian.',
+          );
+        }
+      }
+
+      final String? guardianCode =
+          _selectedRole == 'deaf' ? _generateGuardianCode() : null;
+
       Map<String, dynamic> userData = {
         'uid': widget.uid,
         'email': widget.email,
@@ -69,12 +108,8 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
         'phoneNumber': phone.isEmpty ? 'Not set' : phone,
         'role': _selectedRole,
         'createdAt': FieldValue.serverTimestamp(),
+        if (guardianCode != null) 'guardianCode': guardianCode,
       };
-
-      // Add Guardian Code only if registering as a Deaf User
-      if (_selectedRole == 'deaf') {
-        userData['guardianCode'] = _generateGuardianCode();
-      }
 
       // Save user record to Firestore
       await FirebaseFirestore.instance
@@ -82,12 +117,85 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
           .doc(widget.uid)
           .set(userData, SetOptions(merge: true));
 
+      // Create guardian link document if registering as a Guardian
+      if (_selectedRole == 'guardian' && deafUserUid != null) {
+        await FirebaseFirestore.instance
+            .collection('guardian_links')
+            .doc(deafUserUid)
+            .set({
+          'deafUserUid': deafUserUid,
+          'guardianUid': widget.uid,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
       if (mounted) {
-        // Redirect to the correct homepage according to selected role
+        // Pop up the Guardian Link Code for Deaf users, just like the signup page
+        if (_selectedRole == 'deaf' && guardianCode != null) {
+          await showDialog<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (dialogContext) {
+              return AlertDialog(
+                title: const Text('Profile Completed'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Your Guardian Link Code'),
+                    const SizedBox(height: 12),
+                    SelectableText(
+                      guardianCode,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Share this code with your Guardian to connect accounts.',
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton.icon(
+                    onPressed: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: guardianCode),
+                      );
+
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Guardian Code copied')),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.copy_outlined),
+                    label: const Text('Copy Code'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Continue'),
+                  ),
+                ],
+              );
+            },
+          );
+        }
+
+        if (!mounted) return;
+
+        // Redirect straight to the navigation bar homepage for the selected role
         if (_selectedRole == 'guardian') {
-          Navigator.of(context).pushNamedAndRemoveUntil('/guardianHome', (route) => false);
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const GuardianMainScreen()),
+            (route) => false,
+          );
         } else {
-          Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const MainScreen()),
+            (route) => false,
+          );
         }
       }
     } catch (e) {
@@ -147,19 +255,41 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Phone Field
-                TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
-                    labelText: 'Phone Number (Optional)',
-                    prefixIcon: const Icon(Icons.phone_outlined),
-                    filled: true,
-                    fillColor: _surfaceColor,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                // Phone Field (Deaf / Hard of Hearing User)
+                if (_selectedRole == 'deaf') ...[
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: 'Phone Number (Optional)',
+                      prefixIcon: const Icon(Icons.phone_outlined),
+                      filled: true,
+                      fillColor: _surfaceColor,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 28),
+                  const SizedBox(height: 16),
+                ],
+
+                // Guardian Link Code Field (Guardian)
+                if (_selectedRole == 'guardian') ...[
+                  TextFormField(
+                    controller: _guardianCodeController,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: InputDecoration(
+                      labelText: 'Enter Guardian Link Code',
+                      prefixIcon: const Icon(Icons.vpn_key_outlined),
+                      filled: true,
+                      fillColor: _surfaceColor,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    ),
+                    validator: (val) =>
+                        val == null || val.trim().isEmpty ? 'Please enter the Guardian Link Code' : null,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                const SizedBox(height: 12),
 
                 // Role Selection Cards
                 const Text(

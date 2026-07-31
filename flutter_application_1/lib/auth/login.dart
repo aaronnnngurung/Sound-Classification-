@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'forgot_password_page.dart';
 import 'signup_page.dart';
 import 'complete_profile_page.dart';
+import 'package:flutter_application_1/guardian/guardian_main_screen.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -136,7 +137,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           // Route user based on role stored in Firestore
           String role = data['role'];
           if (role == 'guardian') {
-            Navigator.of(context).pushNamedAndRemoveUntil('/guardianHome', (route) => false);
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const GuardianMainScreen()),
+              (route) => false,
+            );
           } else {
             Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
           }
@@ -231,7 +235,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           // User exists and already has a role set -> Redirect based on role
           String role = data['role'];
           if (role == 'guardian') {
-            Navigator.of(context).pushNamedAndRemoveUntil('/guardianHome', (route) => false);
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const GuardianMainScreen()),
+              (route) => false,
+            );
           } else {
             Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
           }
